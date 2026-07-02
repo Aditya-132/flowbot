@@ -260,6 +260,10 @@ app.get("/api/health", wrap(async (_req, res) => {
   res.json({ ok: true, service: "flowbot-backend", db: "postgres" });
 }));
 
+app.get("/api/healthz", (_req, res) => {
+  res.json({ ok: true, service: "flowbot-backend" });
+});
+
 /* ------------------- Built frontend (production deploys) ------------------- */
 const frontendDist = path.join(__dirname, "../frontend/dist");
 if (fs.existsSync(frontendDist)) {
