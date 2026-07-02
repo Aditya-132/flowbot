@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: flowbot
+    runtime: node
+    plan: free
+    buildCommand: npm ci --prefix backend && npm ci --prefix frontend && npm run build --prefix frontend
+    startCommand: npm start --prefix backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GRAPH_API_BASE
+        value: https://graph.facebook.com/v21.0
+      - key: GREEN_API_BASE
+        value: https://api.green-api.com
+      - key: WHAPI_API_BASE
+        value: https://gate.whapi.cloud
+      - key: DATABASE_URL
+        fromDatabase:
+          name: flowbot-db
+          property: connectionString
+
+databases:
+  - name: flowbot-db
+    databaseName: flowbot
+    user: flowbot
