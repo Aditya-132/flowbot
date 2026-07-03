@@ -42,7 +42,7 @@ setInterval(() => {
   for (const [key, s] of sessions) if ((s.lastSeen || 0) < cutoff) sessions.delete(key);
 }, 10 * 60 * 1000).unref();
 
-const NODE_LIMIT = 50;
+const NODE_LIMIT = 150;
 const validateFlow = (body) => {
   if (!Array.isArray(body.nodes) || !Array.isArray(body.edges)) return "nodes and edges arrays required";
   if (body.nodes.length > NODE_LIMIT) return "too many blocks";

@@ -7,7 +7,7 @@ import { TEMPLATES } from "./templates.js";
    FlowBot — WhatsApp Bot Builder (full-stack)
    Design a flowchart → backend stores it → deterministic code
    export → activate with provider creds → live webhook + simulator.
-   35 pre-embedded features. NO AI in the bot runtime.
+   38 pre-embedded features. NO AI in the bot runtime.
    ============================================================ */
 
 const NODE_W = 220;
@@ -214,6 +214,21 @@ const NODE_TYPES = {
     label: "Review Request", icon: "💚", color: "#6EE7B7",
     desc: "Asks happy customers for a review.",
     defaults: () => ({ message: "If you liked the experience, please leave us a quick review: https://example.com/review" }),
+  },
+  collect_number: {
+    label: "Collect Number", icon: "#️⃣", color: "#FDE047",
+    desc: "Asks a numeric question (guests, room no.) and validates the reply.",
+    defaults: () => ({ question: "How many guests?", field: "guests", ack: "Got it." }),
+  },
+  location: {
+    label: "Location / Map", icon: "🗺️", color: "#5EEAD4",
+    desc: "Sends your address with a Google Maps link.",
+    defaults: () => ({ title: "Our address", address: "12 MG Road, Pune 411001", mapsUrl: "https://maps.google.com/?q=example" }),
+  },
+  contact_card: {
+    label: "Contact Card", icon: "📇", color: "#FDA4AF",
+    desc: "Shares phone, email and website in one card.",
+    defaults: () => ({ title: "Reach us", phone: "+91 98765 43210", email: "hello@example.com", website: "https://example.com" }),
   },
 };
 
@@ -663,7 +678,7 @@ function Builder({ user, onLogout }) {
           <div style={S.palette}>
             <div style={S.paneTitle}>Feature blocks</div>
             <div style={{ fontSize: 11, color: "#7d9c8c", marginBottom: 10 }}>
-              35 deterministic WhatsApp blocks backed by pre-written server handlers.
+              38 deterministic WhatsApp blocks backed by pre-written server handlers.
             </div>
             {Object.entries(NODE_TYPES).map(([k, t]) => (
               <button key={k} onClick={() => addNode(k)} style={S.paletteItem}>

@@ -9,6 +9,7 @@ const interp = (msg, vars) => String(msg || "").replace(/\{(\w+)\}/g, (m, k) => 
 const menuTypes = new Set(["menu", "quick_reply", "language", "lead_qualify"]);
 const collectConfig = {
   collect: { field: "field", question: "question", ack: "Got it." },
+  collect_number: { field: "field", question: "Please share a number:", ack: "Got it." },
   collect_email: { fixedField: "email", question: "question", ack: "Thanks, I saved your email." },
   collect_phone: { fixedField: "phone", question: "question", ack: "Thanks, I saved your phone number." },
   collect_address: { fixedField: "address", question: "question", ack: "Thanks, I saved your address." },
@@ -197,6 +198,29 @@ function processMessage(flow, text, session) {
           cur = next(cur.id, 0);
           break;
 
+        case "location":
+          out.push(
+            [
+              `📍 ${interp(c.title || "Our address", session.vars)}`,
+              interp(c.address, session.vars),
+              c.mapsUrl ? `🗺️ Directions: ${interp(c.mapsUrl, session.vars)}` : "",
+            ].filter(Boolean).join("\n")
+          );
+          cur = next(cur.id, 0);
+          break;
+
+        case "contact_card":
+          out.push(
+            [
+              `📇 ${interp(c.title || "Contact us", session.vars)}`,
+              c.phone ? `📞 ${interp(c.phone, session.vars)}` : "",
+              c.email ? `📧 ${interp(c.email, session.vars)}` : "",
+              c.website ? `🌐 ${interp(c.website, session.vars)}` : "",
+            ].filter(Boolean).join("\n")
+          );
+          cur = next(cur.id, 0);
+          break;
+
         case "product_card":
           out.push(productText(c, session.vars));
           cur = next(cur.id, 0);
@@ -234,14 +258,15 @@ function processMessage(flow, text, session) {
           const tags = new Set(String(session.vars.tags || "").split(",").filter(Boolean));
           if (c.tag) tags.add(c.tag);
           session.vars.tags = Array.from(tags).join(",");
-          out.push(interp(c.message || `Tagged as ${c.tag}.`, session.vars));
+          // an explicitly empty message means "tag silently"
+          out.push(interp(c.message ?? `Tagged as ${c.tag}.`, session.vars));
           cur = next(cur.id, 0);
           break;
         }
 
         case "set_variable":
           session.vars[c.field || "value"] = interp(c.value || "", session.vars);
-          out.push(interp(c.message || "Saved.", session.vars));
+          out.push(interp(c.message ?? "Saved.", session.vars));
           cur = next(cur.id, 0);
           break;
 
@@ -256,7 +281,7 @@ function processMessage(flow, text, session) {
 
         case "save_note":
           session.vars[c.field || "note"] = interp(c.note || "", session.vars);
-          out.push(interp(c.message || "Note saved.", session.vars));
+          out.push(interp(c.message ?? "Note saved.", session.vars));
           cur = next(cur.id, 0);
           break;
 
@@ -358,7 +383,16 @@ function processMessage(flow, text, session) {
       out.push("That doesn't look like a valid phone number — please send your full number with area code.");
       return out;
     }
-    session.vars[fieldName(cur)] = t;
+    if (cur.type === "collect_number") {
+      const numMatch = t.match(/\d+/);
+      if (!numMatch) {
+        out.push("Please reply with a number (e.g. 2).");
+        return out;
+      }
+      session.vars[fieldName(cur)] = numMatch[0];
+    } else {
+      session.vars[fieldName(cur)] = t;
+    }
     const meta = collectConfig[cur.type];
     const ack = c.ack || meta.ack || "Got it.";
     // acks may reference config fields too (e.g. tracking_link's {baseUrl})
