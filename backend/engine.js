@@ -33,6 +33,44 @@ function fieldName(node) {
   return node.config.field || "value";
 }
 
+/* ---------- auto-collect for missing variables ----------
+   If a block is about to show a {var} nobody collected yet, the bot
+   first asks for it, saves the answer, then re-runs the block. */
+const SCAN_KEYS = ["message", "prompt", "question", "caption", "title", "openMessage", "closedMessage", "trueMessage", "falseMessage", "url", "code", "note", "value"];
+
+const prettyVar = (k) =>
+  String(k).replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+
+const askFor = (k) => `Before we continue — please share your ${prettyVar(k)}:`;
+
+function missingVar(node, vars) {
+  const c = node.config || {};
+  // vars this block fills in by itself — never ask the user for these
+  const own = new Set();
+  if (collectConfig[node.type]) own.add(fieldName(node));
+  if (node.type === "csat") own.add(c.field || "rating");
+  if (node.type === "set_variable") own.add(c.field || "value");
+  if (node.type === "save_note") own.add(c.field || "note");
+  if (menuTypes.has(node.type)) {
+    own.add("choice").add(`${node.type}_choice`);
+    if (node.type === "language") own.add("language");
+  }
+  for (const key of SCAN_KEYS) {
+    const s = c[key];
+    if (typeof s !== "string") continue;
+    for (const m of s.matchAll(/\{(\w+)\}/g)) {
+      const k = m[1];
+      if (vars[k] === undefined && c[k] === undefined && !own.has(k)) return k;
+    }
+  }
+  // a condition on a variable nobody set yet should ask, not silently branch false
+  if (node.type === "condition") {
+    const f = c.field || "value";
+    if (vars[f] === undefined && !own.has(f)) return f;
+  }
+  return null;
+}
+
 function optionPrompt(c, vars, fallback = "Choose an option") {
   const options = c.options || [];
   const lines = options.map((o, i) => `${i + 1}. ${o}`).join("\n");
@@ -100,6 +138,13 @@ function processMessage(flow, text, session) {
     let guard = 0;
     while (cur && guard++ < 80) {
       const c = cur.config || {};
+
+      const need = missingVar(cur, session.vars);
+      if (need) {
+        out.push(askFor(need));
+        session.state = `ask|${cur.id}|${need}`;
+        return;
+      }
 
       if (menuTypes.has(cur.type)) {
         out.push(optionPrompt(c, session.vars, "Choose an option"));
@@ -237,6 +282,22 @@ function processMessage(flow, text, session) {
       return out;
     }
     runFrom(start);
+    return out;
+  }
+
+  // waiting on an auto-collected variable: save the answer, re-run the block
+  if (session.state.startsWith("ask|")) {
+    const [, nodeId, varName] = session.state.split("|");
+    const node = byId[nodeId];
+    session.state = null;
+    if (!node) return handleMessage(flow, text, session);
+    if (!t) {
+      out.push(askFor(varName));
+      session.state = `ask|${nodeId}|${varName}`;
+      return out;
+    }
+    session.vars[varName] = t;
+    runFrom(node);
     return out;
   }
 
