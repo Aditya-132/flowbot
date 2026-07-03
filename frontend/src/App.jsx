@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { api } from "./api.js";
+import { api, getToken, setToken } from "./api.js";
+import AuthPage from "./Auth.jsx";
 
 /* ============================================================
    FlowBot — WhatsApp Bot Builder (full-stack)
@@ -264,7 +265,33 @@ const nodeSummary = (n) => {
   return c.message || c.question || c.caption || c.url || c.note || NODE_TYPES[n.type]?.desc || "";
 };
 
+/* ---------- auth gate: login/signup before the builder ---------- */
 export default function App() {
+  const [user, setUser] = useState(undefined); // undefined = checking session
+
+  useEffect(() => {
+    if (!getToken()) return setUser(null);
+    api.me().then((d) => setUser(d.user)).catch(() => { setToken(null); setUser(null); });
+  }, []);
+
+  const logout = async () => {
+    try { await api.logout(); } catch { /* session may already be gone */ }
+    setToken(null);
+    setUser(null);
+  };
+
+  if (user === undefined) {
+    return (
+      <div style={{ ...styles.app, alignItems: "center", justifyContent: "center", fontSize: 14, color: "#8fae9d" }}>
+        Loading…
+      </div>
+    );
+  }
+  if (!user) return <AuthPage onAuth={setUser} />;
+  return <Builder user={user} onLogout={logout} />;
+}
+
+function Builder({ user, onLogout }) {
   const [tab, setTab] = useState(0);
   const [botId, setBotId] = useState(null);
   const [botName, setBotName] = useState("My WhatsApp Bot");
@@ -593,10 +620,15 @@ export default function App() {
           </select>
           <button style={S.ghostBtn} onClick={newFlow}>+ New</button>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {["1 · Design flow", "2 · Bot code", "3 · Activate & test"].map((t, i) => (
             <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(tab === i ? S.tabActive : {}) }}>{t}</button>
           ))}
+          <span style={{ fontSize: 11.5, color: "#8fae9d", marginLeft: 8, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            title={user.email}>
+            👤 {user.name || user.email}
+          </span>
+          <button style={S.ghostBtn} onClick={onLogout}>Log out</button>
         </div>
       </div>
 

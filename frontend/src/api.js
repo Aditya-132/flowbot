@@ -1,20 +1,35 @@
 // Thin client for the FlowBot backend REST API.
+const TOKEN_KEY = "flowbot_token";
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
+
 const j = (r) => {
   if (!r.ok) return r.json().then((d) => Promise.reject(new Error(d.error || r.statusText)));
   return r.json();
 };
 
+const headers = (extra = {}) => {
+  const token = getToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+};
+
+const get = (url) => fetch(url, { headers: headers() });
+const send = (url, method, body) =>
+  fetch(url, { method, headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
+
 export const api = {
-  listFlows: () => fetch("/api/flows").then(j),
-  getFlow: (id) => fetch(`/api/flows/${id}`).then(j),
-  createFlow: (body) =>
-    fetch("/api/flows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(j),
-  updateFlow: (id, body) =>
-    fetch(`/api/flows/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(j),
-  deleteFlow: (id) => fetch(`/api/flows/${id}`, { method: "DELETE" }).then(j),
-  activate: (id, creds) =>
-    fetch(`/api/flows/${id}/activate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(creds) }).then(j),
-  simulate: (id, payload) =>
-    fetch(`/api/flows/${id}/simulate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).then(j),
-  getCode: (id) => fetch(`/api/flows/${id}/code`).then((r) => r.text()),
+  signup: (body) => send("/api/auth/signup", "POST", body).then(j),
+  login: (body) => send("/api/auth/login", "POST", body).then(j),
+  logout: () => send("/api/auth/logout", "POST", {}).then(j),
+  me: () => get("/api/auth/me").then(j),
+
+  listFlows: () => get("/api/flows").then(j),
+  getFlow: (id) => get(`/api/flows/${id}`).then(j),
+  createFlow: (body) => send("/api/flows", "POST", body).then(j),
+  updateFlow: (id, body) => send(`/api/flows/${id}`, "PUT", body).then(j),
+  deleteFlow: (id) => fetch(`/api/flows/${id}`, { method: "DELETE", headers: headers() }).then(j),
+  activate: (id, creds) => send(`/api/flows/${id}/activate`, "POST", creds).then(j),
+  simulate: (id, payload) => send(`/api/flows/${id}/simulate`, "POST", payload).then(j),
+  getCode: (id) => get(`/api/flows/${id}/code`).then((r) => r.text()),
 };

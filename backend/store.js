@@ -32,6 +32,26 @@ async function init() {
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS green JSONB;`);
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS whapi JSONB;`);
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'twilio';`);
+
+  // auth: user accounts + bearer-token sessions; flows are owned per user
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            TEXT PRIMARY KEY,
+      email         TEXT NOT NULL UNIQUE,
+      name          TEXT NOT NULL DEFAULT '',
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token      TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE;`);
 }
 
 const rowToFlow = (r) =>
@@ -46,6 +66,7 @@ const rowToFlow = (r) =>
     whapi: r.whapi,
     provider: r.provider,
     active: r.active,
+    userId: r.user_id,
     updatedAt: r.updated_at,
   };
 
@@ -53,10 +74,11 @@ module.exports = {
   init,
   pool,
 
-  list: async () => {
+  list: async (userId) => {
     const { rows } = await pool.query(
       `SELECT id, name, active, updated_at, jsonb_array_length(nodes) AS blocks
-       FROM flows ORDER BY updated_at DESC`
+       FROM flows WHERE user_id = $1 OR user_id IS NULL ORDER BY updated_at DESC`,
+      [userId]
     );
     return rows.map((r) => ({
       id: r.id,
@@ -74,9 +96,9 @@ module.exports = {
 
   upsert: async (flow) => {
     const { rows } = await pool.query(
-      `INSERT INTO flows (id, name, nodes, edges, twilio, meta, green, whapi, provider, active, updated_at)
+      `INSERT INTO flows (id, name, nodes, edges, twilio, meta, green, whapi, provider, active, user_id, updated_at)
        VALUES ($1, COALESCE($2, 'Untitled bot'), COALESCE($3, '[]'::jsonb),
-               COALESCE($4, '[]'::jsonb), $5, $6, $7, $8, COALESCE($9, 'twilio'), COALESCE($10, false), now())
+               COALESCE($4, '[]'::jsonb), $5, $6, $7, $8, COALESCE($9, 'twilio'), COALESCE($10, false), $11, now())
        ON CONFLICT (id) DO UPDATE SET
          name       = COALESCE($2, flows.name),
          nodes      = COALESCE($3, flows.nodes),
@@ -87,6 +109,7 @@ module.exports = {
          whapi      = COALESCE($8, flows.whapi),
          provider   = COALESCE($9, flows.provider),
          active     = COALESCE($10, flows.active),
+         user_id    = COALESCE($11, flows.user_id),
          updated_at = now()
        RETURNING *`,
       [
@@ -100,6 +123,7 @@ module.exports = {
         flow.whapi ? JSON.stringify(flow.whapi) : null,
         flow.provider ?? null,
         typeof flow.active === "boolean" ? flow.active : null,
+        flow.userId ?? null,
       ]
     );
     return rowToFlow(rows[0]);

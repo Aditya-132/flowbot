@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const store = require("./store");
+const auth = require("./auth");
 const { handleMessage } = require("./engine");
 const { generateStandalone } = require("./codegen");
 const metaApi = require("./meta");
@@ -58,12 +59,25 @@ const validateFlow = (body) => {
   return null;
 };
 
+/* ------------------- Auth ------------------- */
+app.post("/api/auth/signup", wrap(auth.signup));
+app.post("/api/auth/login", wrap(auth.login));
+app.post("/api/auth/logout", auth.requireAuth, wrap(auth.logout));
+app.get("/api/auth/me", auth.requireAuth, wrap(auth.me));
+
+// everything under /api/flows requires a logged-in user
+app.use("/api/flows", auth.requireAuth);
+
+// a user can touch their own flows; pre-auth flows (no owner) stay reachable
+// and are claimed by whoever saves them next
+const owns = (f, req) => !f.userId || f.userId === req.user.id;
+
 /* ------------------- Flows CRUD ------------------- */
-app.get("/api/flows", wrap(async (_req, res) => res.json(await store.list())));
+app.get("/api/flows", wrap(async (req, res) => res.json(await store.list(req.user.id))));
 
 app.get("/api/flows/:id", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
-  if (!f) return res.status(404).json({ error: "not found" });
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   // never leak auth tokens back to the client
   const { twilio, meta, green, whapi: whapiCreds, ...rest } = f;
   res.json({
@@ -88,20 +102,23 @@ app.post("/api/flows", wrap(async (req, res) => {
     nodes: req.body.nodes,
     edges: req.body.edges,
     active: false,
+    userId: req.user.id,
   });
   res.status(201).json({ id: flow.id, name: flow.name });
 }));
 
 app.put("/api/flows/:id", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
-  if (!f) return res.status(404).json({ error: "not found" });
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   const err = validateFlow(req.body);
   if (err) return res.status(400).json({ error: err });
-  await store.upsert({ id: f.id, name: (req.body.name || f.name).slice(0, 60), nodes: req.body.nodes, edges: req.body.edges });
+  await store.upsert({ id: f.id, name: (req.body.name || f.name).slice(0, 60), nodes: req.body.nodes, edges: req.body.edges, userId: req.user.id });
   res.json({ ok: true });
 }));
 
 app.delete("/api/flows/:id", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (f && !owns(f, req)) return res.status(404).json({ error: "not found" });
   await store.remove(req.params.id);
   res.json({ ok: true });
 }));
@@ -109,7 +126,7 @@ app.delete("/api/flows/:id", wrap(async (req, res) => {
 /* ------------------- Activation ------------------- */
 app.post("/api/flows/:id/activate", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
-  if (!f) return res.status(404).json({ error: "not found" });
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   if (!f.nodes.some((n) => n.type === "welcome"))
     return res.status(400).json({ error: "flow needs a Welcome block before activation" });
 
@@ -169,7 +186,7 @@ app.post("/api/flows/:id/activate", wrap(async (req, res) => {
 
 app.post("/api/flows/:id/deactivate", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
-  if (!f) return res.status(404).json({ error: "not found" });
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   await store.upsert({ id: f.id, active: false });
   res.json({ ok: true });
 }));
@@ -177,7 +194,7 @@ app.post("/api/flows/:id/deactivate", wrap(async (req, res) => {
 /* ------------------- Simulator (same engine as webhook) ------------------- */
 app.post("/api/flows/:id/simulate", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
-  if (!f) return res.status(404).json({ error: "not found" });
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   const from = req.body.from || "simulator";
   const key = `${f.id}|${from}`;
   if (req.body.reset) sessions.delete(key);
@@ -189,7 +206,7 @@ app.post("/api/flows/:id/simulate", wrap(async (req, res) => {
 /* ------------------- Code export ------------------- */
 app.get("/api/flows/:id/code", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
-  if (!f) return res.status(404).json({ error: "not found" });
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   res.type("text/plain").send(generateStandalone(f));
 }));
 
