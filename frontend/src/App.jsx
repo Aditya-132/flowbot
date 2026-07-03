@@ -319,7 +319,8 @@ const nodeSummary = (n) => {
   return c.message || c.question || c.caption || c.url || c.note || NODE_TYPES[n.type]?.desc || "";
 };
 
-/* ---------- auth gate: login/signup before the builder ---------- */
+/* ---------- app shell: builder is open to guests; auth appears as a
+   modal only when saving, making blocks, exporting code or activating ---------- */
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined = checking session
 
@@ -341,11 +342,10 @@ export default function App() {
       </div>
     );
   }
-  if (!user) return <AuthPage onAuth={setUser} />;
-  return <Builder user={user} onLogout={logout} />;
+  return <Builder user={user} onAuthed={setUser} onLogout={logout} />;
 }
 
-function Builder({ user, onLogout }) {
+function Builder({ user, onAuthed, onLogout }) {
   const [tab, setTab] = useState(0);
   const [botId, setBotId] = useState(null);
   const [botName, setBotName] = useState("My WhatsApp Bot");
@@ -371,13 +371,41 @@ function Builder({ user, onLogout }) {
   const [toast, setToast] = useState(null);
   const [customBlocks, setCustomBlocks] = useState([]);
   const [blockLab, setBlockLab] = useState(null); // null | draft {id?, name, icon, color, descr, steps}
+  const [authOpen, setAuthOpen] = useState(false);
+  const pendingAuth = useRef(null); // action to resume after a successful login
+  const userRef = useRef(user);
   const canvasRef = useRef(null);
   const chatEndRef = useRef(null);
 
   const hasWelcome = nodes.some((n) => n.type === "welcome");
   const selNode = nodes.find((n) => n.id === sel);
 
-  useEffect(() => { refreshList(); refreshBlocks(); }, []);
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    if (user) { refreshList(); refreshBlocks(); }
+    else { setSavedFlows([]); setCustomBlocks([]); }
+  }, [user]);
+
+  // Gate an action behind login: run it now, or open the auth modal and
+  // resume it right after a successful login/signup.
+  const needAuth = (action) => {
+    if (userRef.current) return action();
+    pendingAuth.current = action;
+    setAuthOpen(true);
+  };
+  const handleAuthed = (u) => {
+    userRef.current = u;
+    onAuthed(u);
+    setAuthOpen(false);
+    const fn = pendingAuth.current;
+    pendingAuth.current = null;
+    if (fn) setTimeout(fn, 0); // let state settle, then resume what they were doing
+  };
+  const handleLogout = () => {
+    onLogout();
+    // the flow on canvas stays, but it no longer points at a server-side bot
+    setBotId(null); setActivated(false); setActivation(null); setDirty(true); setChat([]);
+  };
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
 
   const flash = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 2400); };
@@ -391,6 +419,7 @@ function Builder({ user, onLogout }) {
   // Returns the bot id on success, null on failure (avoids stale-state reads
   // right after the first save creates the id).
   async function saveFlow() {
+    if (!userRef.current) { needAuth(() => saveFlow()); return null; }
     setBusy(true);
     try {
       let id = botId;
@@ -463,6 +492,7 @@ function Builder({ user, onLogout }) {
 
   /* ---------- tab switching (auto-saves before code/activate) ---------- */
   async function goTab(i) {
+    if (i > 0 && !userRef.current) { needAuth(() => goTab(i)); return; }
     if (i > 0) {
       const id = await ensureSaved();
       if (!id) return;
@@ -586,6 +616,7 @@ function Builder({ user, onLogout }) {
 
   async function saveBlockLab() {
     if (!blockLab) return;
+    if (!userRef.current) { needAuth(() => saveBlockLab()); return; }
     if (!(blockLab.steps || []).length) return flash("Add at least one step to your block.", true);
     try {
       const saved = blockLab.id
@@ -620,6 +651,7 @@ function Builder({ user, onLogout }) {
 
   /* ---------- activation + simulator (both via backend) ---------- */
   async function activateBot() {
+    if (!userRef.current) { needAuth(activateBot); return; }
     const ok = await ensureSaved();
     if (!ok) return;
     setBusy(true);
@@ -670,6 +702,7 @@ function Builder({ user, onLogout }) {
     document.body.removeChild(ta);
   };
   const downloadZip = async () => {
+    if (!userRef.current) { needAuth(downloadZip); return; }
     const id = await ensureSaved();
     if (!id) return;
     try {
@@ -728,15 +761,25 @@ function Builder({ user, onLogout }) {
           {["1 · Design flow", "2 · Bot code", "3 · Activate & test"].map((t, i) => (
             <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(tab === i ? S.tabActive : {}) }}>{t}</button>
           ))}
-          <span style={{ fontSize: 11.5, color: "#8fae9d", marginLeft: 8, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            title={user.email}>
-            👤 {user.name || user.email}
-          </span>
-          <button style={S.ghostBtn} onClick={onLogout}>Log out</button>
+          {user ? (<>
+            <span style={{ fontSize: 11.5, color: "#8fae9d", marginLeft: 8, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              title={user.email}>
+              👤 {user.name || user.email}
+            </span>
+            <button style={S.ghostBtn} onClick={handleLogout}>Log out</button>
+          </>) : (
+            <button style={{ ...S.primaryBtn, marginLeft: 8 }} onClick={() => setAuthOpen(true)}>🔐 Log in / Sign up</button>
+          )}
         </div>
       </div>
 
       {toast && <div style={{ ...S.toast, background: toast.err ? "#3a1414" : "#0d2a1a", borderColor: toast.err ? "#FF7A7A" : "#2fbf71", color: toast.err ? "#ffb3b3" : "#9be8c0" }}>{toast.msg}</div>}
+
+      {/* ============ AUTH MODAL: only when an action needs an account ============ */}
+      {authOpen && (
+        <AuthPage modal onAuth={handleAuthed}
+          onClose={() => { setAuthOpen(false); pendingAuth.current = null; }} />
+      )}
 
       {/* ============ BLOCK LAB: design your own feature block ============ */}
       {blockLab && (

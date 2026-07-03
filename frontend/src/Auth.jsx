@@ -2,11 +2,13 @@ import { useState } from "react";
 import { api, setToken } from "./api.js";
 
 /* ============================================================
-   Auth page — login / signup. On success stores the bearer
-   token and hands the user object up to the app shell.
+   Auth — login / signup. Renders as a full page, or as a modal
+   (modal + onClose props) when a guest hits a login-only action:
+   saving a bot, saving a custom block, exporting code, activating.
+   On success stores the bearer token and hands the user up.
    ============================================================ */
 
-export default function AuthPage({ onAuth }) {
+export default function AuthPage({ onAuth, modal = false, onClose }) {
   const [mode, setMode] = useState("login"); // "login" | "signup"
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,15 +37,22 @@ export default function AuthPage({ onAuth }) {
   const switchMode = (m) => { setMode(m); setError(null); };
 
   return (
-    <div style={S.page}>
-      <div style={S.card}>
+    <div style={{ ...S.page, ...(modal ? S.pageModal : {}) }} onClick={modal ? onClose : undefined}>
+      <div style={S.card} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
           <div style={S.logo}>⚡</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 style={{ fontWeight: 800, fontSize: 20, margin: 0 }}>FlowBot — WhatsApp Bot Builder</h1>
             <div style={{ fontSize: 11, color: "#8fae9d" }}>drag & drop flowchart → live WhatsApp bot · no code, no AI</div>
           </div>
+          {modal && <button style={S.closeBtn} onClick={onClose} title="Keep building without an account">✕</button>}
         </div>
+        {modal && (
+          <div style={S.modalNote}>
+            🔐 Create a free account (or log in) to save this bot, make custom blocks, export code and go live.
+            Your canvas stays exactly as it is.
+          </div>
+        )}
         <p style={{ fontSize: 12, color: "#8fae9d", margin: 0, lineHeight: 1.55 }}>
           38+ ready blocks, hotel/restaurant/bank/store templates, a Block Lab to invent your own
           blocks, a live simulator — go live on Meta, Twilio, Green API or Whapi, or export your
@@ -105,6 +114,9 @@ export default function AuthPage({ onAuth }) {
 
 const S = {
   page: { height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0a120d", color: "#e6f4ec", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", backgroundImage: "radial-gradient(#1a2f22 1.2px, transparent 1.2px)", backgroundSize: "22px 22px" },
+  pageModal: { position: "fixed", inset: 0, zIndex: 96, height: "auto", background: "rgba(4,10,7,.82)", backgroundImage: "none" },
+  closeBtn: { border: "1px solid #2a4535", background: "#0d1b13", color: "#8fae9d", borderRadius: 8, padding: "4px 9px", cursor: "pointer", fontFamily: "inherit", fontSize: 13 },
+  modalNote: { fontSize: 12, color: "#9be8c0", background: "#0d1f14", border: "1px solid #2fbf71", borderRadius: 10, padding: "9px 12px", lineHeight: 1.5 },
   card: { width: 360, maxWidth: "92vw", display: "flex", flexDirection: "column", gap: 16, background: "#0c1610", border: "1px solid #16281e", borderRadius: 16, padding: 26, boxShadow: "0 20px 50px rgba(0,0,0,.5)" },
   logo: { width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#25D366,#128C7E)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 0 18px #25d36644" },
   tabs: { display: "flex", gap: 6, background: "#0a120d", border: "1px solid #1d3328", borderRadius: 10, padding: 4 },
