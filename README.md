@@ -4,6 +4,8 @@
 flowchart in the browser and FlowBot turns it into a working WhatsApp bot —
 **deterministically, from pre-embedded code templates. No AI anywhere in the bot runtime.**
 
+🌐 **Live: [flochatbot.com](https://flochatbot.com)**
+
 ✨ Highlights: 38+ ready feature blocks · 🧪 **Block Lab** to invent your own blocks from steps ·
 🏨 rich templates (Hotel Paradise Hyderabad — 77 blocks, restaurant, bank, chess academy, online
 store) · 💬 live chat simulator · 🔐 multi-user accounts with per-user bots · 🚀 one-click
