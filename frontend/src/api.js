@@ -24,6 +24,11 @@ export const api = {
   logout: () => send("/api/auth/logout", "POST", {}).then(j),
   me: () => get("/api/auth/me").then(j),
 
+  listBlocks: () => get("/api/blocks").then(j),
+  createBlock: (body) => send("/api/blocks", "POST", body).then(j),
+  updateBlock: (id, body) => send(`/api/blocks/${id}`, "PUT", body).then(j),
+  deleteBlock: (id) => fetch(`/api/blocks/${id}`, { method: "DELETE", headers: headers() }).then(j),
+
   listFlows: () => get("/api/flows").then(j),
   getFlow: (id) => get(`/api/flows/${id}`).then(j),
   createFlow: (body) => send("/api/flows", "POST", body).then(j),

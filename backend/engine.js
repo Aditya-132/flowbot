@@ -72,6 +72,46 @@ function missingVar(node, vars) {
   return null;
 }
 
+/* ---------- user-made custom blocks ----------
+   A custom block is a list of deterministic steps stored in its config:
+     { kind: "say",    message }
+     { kind: "set",    field, value }
+     { kind: "ask",    question, field, validate: text|number|email|phone, ack? }
+     { kind: "choice", prompt, options[] }  → branches to output port = option index
+   Steps run in order; ask/choice pause for the user's reply. */
+
+function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn) {
+  const steps = (node.config && Array.isArray(node.config.steps) ? node.config.steps : []);
+  for (let i = startIdx; i < steps.length; i++) {
+    const s = steps[i] || {};
+    if (s.kind === "say") {
+      out.push(interpFn(s.message, session.vars));
+    } else if (s.kind === "set") {
+      session.vars[s.field || "value"] = interpFn(s.value || "", session.vars);
+    } else if (s.kind === "ask") {
+      out.push(interpFn(s.question || "Please share:", session.vars));
+      session.state = `step|${node.id}|${i}`;
+      return true; // waiting for the user's answer
+    } else if (s.kind === "choice") {
+      out.push(optionPromptFn({ prompt: s.prompt, options: s.options }, session.vars));
+      session.state = `step|${node.id}|${i}`;
+      return true;
+    }
+  }
+  return false; // ran to the end without pausing
+}
+
+const ASK_VALIDATORS = {
+  number: (t) => {
+    const m = t.match(/\d+/);
+    return m ? { value: m[0] } : { error: "Please reply with a number (e.g. 2)." };
+  },
+  email: (t) =>
+    /^\S+@\S+\.\S+$/.test(t) ? { value: t } : { error: "That doesn't look like a valid email — please try again (e.g. name@example.com)." },
+  phone: (t) =>
+    t.replace(/\D/g, "").length >= 7 ? { value: t } : { error: "That doesn't look like a valid phone number — please send your full number." },
+};
+
 function optionPrompt(c, vars, fallback = "Choose an option") {
   const options = c.options || [];
   const lines = options.map((o, i) => `${i + 1}. ${o}`).join("\n");
@@ -285,6 +325,13 @@ function processMessage(flow, text, session) {
           cur = next(cur.id, 0);
           break;
 
+        case "custom": {
+          const waiting = runCustomSteps(cur, session, out, 0, interp, optionPrompt);
+          if (waiting) return;
+          cur = next(cur.id, 0);
+          break;
+        }
+
         case "goodbye":
           out.push(interp(c.message, session.vars));
           session.state = null;
@@ -307,6 +354,56 @@ function processMessage(flow, text, session) {
       return out;
     }
     runFrom(start);
+    return out;
+  }
+
+  // paused inside a custom block: handle the answer to that step, then resume
+  if (session.state.startsWith("step|")) {
+    const [, nodeId, idxStr] = session.state.split("|");
+    const node = byId[nodeId];
+    const idx = parseInt(idxStr, 10);
+    const steps = node && Array.isArray(node.config?.steps) ? node.config.steps : [];
+    const s = steps[idx];
+    if (!node || !s) {
+      session.state = null;
+      return handleMessage(flow, text, session);
+    }
+    if (s.kind === "ask") {
+      if (!t) {
+        out.push(interp(s.question || "Please share:", session.vars));
+        return out;
+      }
+      const validator = ASK_VALIDATORS[s.validate];
+      const result = validator ? validator(t) : { value: t };
+      if (result.error) {
+        out.push(result.error);
+        return out;
+      }
+      session.state = null;
+      session.vars[s.field || "value"] = result.value;
+      if (s.ack) out.push(interp(s.ack, session.vars));
+      const waiting = runCustomSteps(node, session, out, idx + 1, interp, optionPrompt);
+      if (!waiting) continueOrEnd(node, 0);
+      return out;
+    }
+    // choice step: same matching rules as menus, then branch to that port
+    const options = s.options || [];
+    const lower = t.toLowerCase();
+    const num = t.match(/^(\d+)\s*[.)]?$/);
+    let idx2 = num ? parseInt(num[1], 10) - 1 : -1;
+    if (!(idx2 >= 0 && idx2 < options.length)) idx2 = options.findIndex((o) => String(o).toLowerCase() === lower);
+    if (idx2 < 0 && lower.length >= 3) {
+      const hits = options.map((o, i) => (String(o).toLowerCase().startsWith(lower) ? i : -1)).filter((i) => i >= 0);
+      if (hits.length === 1) idx2 = hits[0];
+    }
+    if (idx2 >= 0 && idx2 < options.length) {
+      session.state = null;
+      session.vars.choice = options[idx2];
+      if (s.field) session.vars[s.field] = options[idx2];
+      continueOrEnd(node, idx2);
+    } else {
+      out.push(`Sorry, I didn't catch that.\n\n${optionPrompt({ prompt: s.prompt, options }, session.vars)}`);
+    }
     return out;
   }
 

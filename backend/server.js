@@ -43,6 +43,22 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 const NODE_LIMIT = 150;
+const STEP_KINDS = new Set(["say", "ask", "set", "choice"]);
+const STEP_LIMIT = 30;
+
+// steps power user-made custom blocks — validate their shape wherever they arrive
+const validateSteps = (steps) => {
+  if (!Array.isArray(steps)) return "steps must be an array";
+  if (steps.length > STEP_LIMIT) return `a custom block can have at most ${STEP_LIMIT} steps`;
+  for (const s of steps) {
+    if (!s || typeof s !== "object" || Array.isArray(s)) return "every step must be an object";
+    if (!STEP_KINDS.has(s.kind)) return "step kind must be say, ask, set or choice";
+    if (s.kind === "choice" && (!Array.isArray(s.options) || !s.options.length || s.options.length > 8))
+      return "a choice step needs 1-8 options";
+  }
+  return null;
+};
+
 const validateFlow = (body) => {
   if (!Array.isArray(body.nodes) || !Array.isArray(body.edges)) return "nodes and edges arrays required";
   if (body.nodes.length > NODE_LIMIT) return "too many blocks";
@@ -51,6 +67,10 @@ const validateFlow = (body) => {
   for (const n of body.nodes) {
     if (!n || typeof n.id !== "string" || typeof n.type !== "string") return "every block needs an id and a type";
     if (n.config !== undefined && (typeof n.config !== "object" || n.config === null || Array.isArray(n.config))) return "block config must be an object";
+    if (n.type === "custom") {
+      const err = validateSteps(n.config?.steps ?? []);
+      if (err) return err;
+    }
     if (ids.has(n.id)) return "duplicate block id";
     ids.add(n.id);
   }
@@ -72,6 +92,44 @@ app.use("/api/flows", auth.requireAuth);
 // a user can touch their own flows; pre-auth flows (no owner) stay reachable
 // and are claimed by whoever saves them next
 const owns = (f, req) => !f.userId || f.userId === req.user.id;
+
+/* ------------------- Custom feature blocks (Block Lab) ------------------- */
+app.use("/api/blocks", auth.requireAuth);
+
+const cleanBlock = (body) => ({
+  name: String(body.name || "My block").slice(0, 40),
+  icon: String(body.icon || "🧩").slice(0, 8),
+  color: /^#[0-9a-fA-F]{6}$/.test(body.color || "") ? body.color : "#9BE8C0",
+  descr: String(body.descr || "").slice(0, 120),
+  steps: body.steps || [],
+});
+
+app.get("/api/blocks", wrap(async (req, res) => res.json(await store.listBlocks(req.user.id))));
+
+app.post("/api/blocks", wrap(async (req, res) => {
+  const b = cleanBlock(req.body);
+  const err = validateSteps(b.steps);
+  if (err) return res.status(400).json({ error: err });
+  if (!b.steps.length) return res.status(400).json({ error: "add at least one step" });
+  const saved = await store.upsertBlock({ id: crypto.randomBytes(6).toString("hex"), userId: req.user.id, ...b });
+  res.status(201).json(saved);
+}));
+
+app.put("/api/blocks/:id", wrap(async (req, res) => {
+  const existing = await store.getBlock(req.params.id, req.user.id);
+  if (!existing) return res.status(404).json({ error: "not found" });
+  const b = cleanBlock(req.body);
+  const err = validateSteps(b.steps);
+  if (err) return res.status(400).json({ error: err });
+  if (!b.steps.length) return res.status(400).json({ error: "add at least one step" });
+  const saved = await store.upsertBlock({ id: existing.id, userId: req.user.id, ...b });
+  res.json(saved);
+}));
+
+app.delete("/api/blocks/:id", wrap(async (req, res) => {
+  await store.removeBlock(req.params.id, req.user.id);
+  res.json({ ok: true });
+}));
 
 /* ------------------- Flows CRUD ------------------- */
 app.get("/api/flows", wrap(async (req, res) => res.json(await store.list(req.user.id))));

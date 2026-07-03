@@ -52,6 +52,20 @@ async function init() {
     );
   `);
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE;`);
+
+  // user-designed custom feature blocks (Block Lab)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS custom_blocks (
+      id         TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      icon       TEXT NOT NULL DEFAULT '🧩',
+      color      TEXT NOT NULL DEFAULT '#9BE8C0',
+      descr      TEXT NOT NULL DEFAULT '',
+      steps      JSONB NOT NULL DEFAULT '[]',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 }
 
 const rowToFlow = (r) =>
@@ -131,5 +145,39 @@ module.exports = {
 
   remove: async (id) => {
     await pool.query(`DELETE FROM flows WHERE id = $1`, [id]);
+  },
+
+  /* ---------- custom feature blocks (Block Lab) ---------- */
+  listBlocks: async (userId) => {
+    const { rows } = await pool.query(
+      `SELECT id, name, icon, color, descr, steps FROM custom_blocks WHERE user_id = $1 ORDER BY updated_at DESC`,
+      [userId]
+    );
+    return rows;
+  },
+
+  getBlock: async (id, userId) => {
+    const { rows } = await pool.query(
+      `SELECT id, name, icon, color, descr, steps FROM custom_blocks WHERE id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+    return rows[0] || null;
+  },
+
+  upsertBlock: async (b) => {
+    const { rows } = await pool.query(
+      `INSERT INTO custom_blocks (id, user_id, name, icon, color, descr, steps, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+       ON CONFLICT (id) DO UPDATE SET
+         name = $3, icon = $4, color = $5, descr = $6, steps = $7, updated_at = now()
+       WHERE custom_blocks.user_id = $2
+       RETURNING id, name, icon, color, descr, steps`,
+      [b.id, b.userId, b.name, b.icon, b.color, b.descr, JSON.stringify(b.steps)]
+    );
+    return rows[0] || null;
+  },
+
+  removeBlock: async (id, userId) => {
+    await pool.query(`DELETE FROM custom_blocks WHERE id = $1 AND user_id = $2`, [id, userId]);
   },
 };

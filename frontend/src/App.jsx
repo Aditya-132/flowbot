@@ -240,12 +240,44 @@ const branchLabels = {
   csat: ["1", "2", "3", "4", "5"],
 };
 
+/* ---------- custom blocks (Block Lab) ---------- */
+const STEP_KINDS = {
+  say: { label: "Send message", icon: "💬" },
+  ask: { label: "Ask & save answer", icon: "❓" },
+  set: { label: "Set variable", icon: "🧩" },
+  choice: { label: "Choices (branches)", icon: "🔀" },
+};
+const stepDefaults = {
+  say: () => ({ kind: "say", message: "Here is some information." }),
+  ask: () => ({ kind: "ask", question: "What's your answer?", field: "answer", validate: "text", ack: "" }),
+  set: () => ({ kind: "set", field: "source", value: "whatsapp" }),
+  choice: () => ({ kind: "choice", prompt: "Pick one:", options: ["Option A", "Option B"] }),
+};
+const stepSummary = (s) =>
+  s.kind === "say" ? s.message
+    : s.kind === "ask" ? `${s.question} → {${s.field || "value"}}`
+      : s.kind === "set" ? `{${s.field}} = ${s.value}`
+        : `${s.prompt} · ${(s.options || []).length} branches`;
+const customSteps = (n) => (Array.isArray(n.config?.steps) ? n.config.steps : []);
+const lastChoice = (n) => {
+  const steps = customSteps(n);
+  const last = steps[steps.length - 1];
+  return last && last.kind === "choice" ? last : null;
+};
+
+// resolves look & label for both built-in and user-made blocks
+const typeInfo = (n) =>
+  n.type === "custom"
+    ? { label: n.config?.label || "Custom block", icon: n.config?.icon || "🧩", color: n.config?.color || "#9be8c0", desc: "Your custom block" }
+    : NODE_TYPES[n.type];
+
 /* ---------- geometry ---------- */
 const listRows = (n) => {
   if (menuLikeTypes.has(n.type)) return n.config.options?.length || 0;
   if (n.type === "faq") return n.config.pairs?.length || 0;
   if (n.type === "catalog" || n.type === "product_search") return n.config.items?.length || 0;
   if (n.type === "csat") return 5;
+  if (n.type === "custom") return Math.min(customSteps(n).length, 8);
   return 0;
 };
 const nodeH = (n) => Math.max(90, 66 + listRows(n) * 26 + 12);
@@ -253,6 +285,10 @@ const outPortPos = (n, i) =>
   outputCount(n) > 1 ? { x: n.x + NODE_W, y: n.y + 66 + i * 26 + 13 } : { x: n.x + NODE_W, y: n.y + 60 };
 const inPortPos = (n) => ({ x: n.x, y: n.y + 18 });
 const outputCount = (n) => {
+  if (n.type === "custom") {
+    const c = lastChoice(n);
+    return c ? Math.max(c.options.length, 1) : 1;
+  }
   const fn = NODE_TYPES[n.type]?.outputs;
   if (!fn) return 1;
   const k = fn(n.config || {});
@@ -260,6 +296,7 @@ const outputCount = (n) => {
 };
 const portLabel = (n, i) => {
   if (menuLikeTypes.has(n.type)) return (n.config.options || [])[i] || `option ${i + 1}`;
+  if (n.type === "custom") return (lastChoice(n)?.options || [])[i] || "";
   if (branchLabels[n.type]) return branchLabels[n.type][i] || "";
   return "";
 };
@@ -278,6 +315,7 @@ const nodeSummary = (n) => {
   if (n.type === "product_search") return `${c.question} · ${(c.items || []).length} searchable items`;
   if (n.type === "business_hours") return `${c.startHour}:00-${c.endHour}:00`;
   if (n.type === "condition") return `{${c.field}} ${c.operator || "equals"} ${c.value}`;
+  if (n.type === "custom") return `${customSteps(n).length} step${customSteps(n).length === 1 ? "" : "s"}`;
   return c.message || c.question || c.caption || c.url || c.note || NODE_TYPES[n.type]?.desc || "";
 };
 
@@ -331,17 +369,20 @@ function Builder({ user, onLogout }) {
   const [chatInput, setChatInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
+  const [customBlocks, setCustomBlocks] = useState([]);
+  const [blockLab, setBlockLab] = useState(null); // null | draft {id?, name, icon, color, descr, steps}
   const canvasRef = useRef(null);
   const chatEndRef = useRef(null);
 
   const hasWelcome = nodes.some((n) => n.type === "welcome");
   const selNode = nodes.find((n) => n.id === sel);
 
-  useEffect(() => { refreshList(); }, []);
+  useEffect(() => { refreshList(); refreshBlocks(); }, []);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
 
   const flash = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 2400); };
   const refreshList = () => api.listFlows().then(setSavedFlows).catch(() => {});
+  const refreshBlocks = () => api.listBlocks().then(setCustomBlocks).catch(() => {});
   const markDirty = () => setDirty(true);
   const webhookFor = (p, id) =>
     p === "meta" ? `/meta/webhook/${id}` : p === "green" ? `/green/webhook/${id}` : p === "whapi" ? `/whapi/webhook/${id}` : `/whatsapp/${id}`;
@@ -379,7 +420,7 @@ function Builder({ user, onLogout }) {
     try {
       const f = await api.getFlow(id);
       // drop blocks of unknown type and wires pointing at missing blocks
-      const loadedNodes = (f.nodes || []).filter((n) => NODE_TYPES[n.type]);
+      const loadedNodes = (f.nodes || []).filter((n) => NODE_TYPES[n.type] || n.type === "custom");
       const ids = new Set(loadedNodes.map((n) => n.id));
       const loadedEdges = (f.edges || []).filter((e) => ids.has(e.from) && ids.has(e.to));
       setBotId(f.id); setBotName(f.name); setNodes(loadedNodes); setEdges(loadedEdges);
@@ -530,6 +571,31 @@ function Builder({ user, onLogout }) {
     const n = { id: uid(), type, x: baseX + Math.random() * 120, y: baseY + Math.random() * 140, config: NODE_TYPES[type].defaults() };
     setNodes((ns) => [...ns, n]); setSel(n.id); markDirty();
   };
+  // drop an instance of a user-made block: its look + steps are copied into the
+  // node config, so the flow stays self-contained (simulator, live, ZIP export)
+  const addCustomNode = (def) => {
+    const view = canvasRef.current;
+    const n = {
+      id: uid(), type: "custom",
+      x: (view?.scrollLeft || 0) + 120 + Math.random() * 120,
+      y: (view?.scrollTop || 0) + 80 + Math.random() * 140,
+      config: { label: def.name, icon: def.icon, color: def.color, steps: JSON.parse(JSON.stringify(def.steps || [])) },
+    };
+    setNodes((ns) => [...ns, n]); setSel(n.id); markDirty();
+  };
+
+  async function saveBlockLab() {
+    if (!blockLab) return;
+    if (!(blockLab.steps || []).length) return flash("Add at least one step to your block.", true);
+    try {
+      const saved = blockLab.id
+        ? await api.updateBlock(blockLab.id, blockLab)
+        : await api.createBlock(blockLab);
+      refreshBlocks();
+      setBlockLab(null);
+      flash(`🧪 Block saved: ${saved.name} — it's in your palette now`);
+    } catch (e) { flash("Could not save block: " + e.message, true); }
+  }
   const deleteNode = (id) => {
     setNodes((ns) => ns.filter((n) => n.id !== id));
     setEdges((es) => es.filter((e) => e.from !== id && e.to !== id));
@@ -672,11 +738,83 @@ function Builder({ user, onLogout }) {
 
       {toast && <div style={{ ...S.toast, background: toast.err ? "#3a1414" : "#0d2a1a", borderColor: toast.err ? "#FF7A7A" : "#2fbf71", color: toast.err ? "#ffb3b3" : "#9be8c0" }}>{toast.msg}</div>}
 
+      {/* ============ BLOCK LAB: design your own feature block ============ */}
+      {blockLab && (
+        <div style={S.overlay} onClick={() => setBlockLab(null)}>
+          <div style={S.labCard} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>🧪 Block Lab — {blockLab.id ? "edit block" : "invent a new block"}</div>
+              <button style={S.miniBtn} onClick={() => setBlockLab(null)}>✕ close</button>
+            </div>
+            <div style={{ fontSize: 11.5, color: "#8fae9d", marginBottom: 12, lineHeight: 1.5 }}>
+              Chain simple steps into any feature you can imagine. It becomes a reusable block in your palette
+              and runs everywhere — simulator, live WhatsApp, exported code. Use {"{variables}"} anywhere.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <Field label="Icon (emoji)">
+                <input style={{ ...S.input, width: 64, textAlign: "center" }} value={blockLab.icon}
+                  onChange={(e) => setBlockLab({ ...blockLab, icon: e.target.value.slice(0, 4) })} />
+              </Field>
+              <div style={{ flex: 1 }}>
+                <Field label="Block name">
+                  <input style={S.input} value={blockLab.name}
+                    onChange={(e) => setBlockLab({ ...blockLab, name: e.target.value })} />
+                </Field>
+              </div>
+            </div>
+            <Field label="Short description (shows in the palette)">
+              <input style={S.input} value={blockLab.descr} placeholder="e.g. 3-question quiz that saves a score"
+                onChange={(e) => setBlockLab({ ...blockLab, descr: e.target.value })} />
+            </Field>
+            <Field label="Color">
+              <div style={{ display: "flex", gap: 6 }}>
+                {["#9BE8C0", "#F5B841", "#4EA8DE", "#B983FF", "#FF7A7A", "#34D399", "#F472B6", "#67E8F9"].map((c) => (
+                  <button key={c} onClick={() => setBlockLab({ ...blockLab, color: c })}
+                    style={{ width: 26, height: 26, borderRadius: 8, background: c, cursor: "pointer", border: blockLab.color === c ? "2.5px solid #e6f4ec" : "2.5px solid transparent" }} />
+                ))}
+              </div>
+            </Field>
+            <Field label="Steps (run top to bottom)">
+              <StepsEditor steps={blockLab.steps} onChange={(steps) => setBlockLab({ ...blockLab, steps })} />
+            </Field>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+              <button style={S.ghostBtn} onClick={() => setBlockLab(null)}>Cancel</button>
+              <button style={S.primaryBtn} onClick={saveBlockLab}>💾 Save block</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ============ TAB 1: DESIGN ============ */}
       {tab === 0 && (
         <div style={S.designWrap}>
           <div style={S.palette}>
-            <div style={S.paneTitle}>Feature blocks</div>
+            <div style={S.paneTitle}>🧪 Your custom blocks</div>
+            <button style={{ ...S.addBtn, marginBottom: 8 }} onClick={() => setBlockLab({ name: "My block", icon: "🧪", color: "#9BE8C0", descr: "", steps: [stepDefaults.say()] })}>
+              ＋ Create your own block
+            </button>
+            {customBlocks.map((b) => (
+              <div key={b.id} style={{ ...S.paletteItem, position: "relative", paddingRight: 30 }}>
+                <span style={{ fontSize: 18, cursor: "pointer" }} onClick={() => addCustomNode(b)}>{b.icon}</span>
+                <span style={{ cursor: "pointer", flex: 1 }} onClick={() => addCustomNode(b)}>
+                  <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: b.color }}>{b.name}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "#8fae9d", lineHeight: 1.35 }}>
+                    {b.descr || `${(b.steps || []).length} step${(b.steps || []).length === 1 ? "" : "s"} · tap to add`}
+                  </span>
+                </span>
+                <button title="Edit block" style={{ ...S.miniBtn, position: "absolute", right: 4, top: 6, padding: "2px 5px" }}
+                  onClick={(e) => { e.stopPropagation(); setBlockLab({ ...b, steps: JSON.parse(JSON.stringify(b.steps || [])) }); }}>✎</button>
+                <button title="Delete block" style={{ ...S.miniBtn, position: "absolute", right: 4, top: 30, padding: "2px 5px", color: "#FF7A7A" }}
+                  onClick={async (e) => { e.stopPropagation(); await api.deleteBlock(b.id).catch(() => {}); refreshBlocks(); }}>✕</button>
+              </div>
+            ))}
+            {!customBlocks.length && (
+              <div style={{ fontSize: 11, color: "#7d9c8c", marginBottom: 10 }}>
+                Dream up any feature — a quiz, an EMI enquiry, a visitor pass — and build it from simple steps. It runs everywhere: simulator, live bot, exported ZIP.
+              </div>
+            )}
+
+            <div style={{ ...S.paneTitle, marginTop: 14 }}>Feature blocks</div>
             <div style={{ fontSize: 11, color: "#7d9c8c", marginBottom: 10 }}>
               38 deterministic WhatsApp blocks backed by pre-written server handlers.
             </div>
@@ -738,7 +876,7 @@ function Builder({ user, onLogout }) {
             </svg>
 
             {nodes.map((n) => {
-              const t = NODE_TYPES[n.type];
+              const t = typeInfo(n);
               const selected = sel === n.id;
               const isConnectTarget = connecting && connecting.from !== n.id && n.type !== "welcome";
               return (
@@ -773,6 +911,9 @@ function Builder({ user, onLogout }) {
                     {n.type === "catalog" && (n.config.items || []).map((o, i) => (
                       <div key={i} style={S.menuRow}>{i + 1}. {(o.name || "Item").length > 20 ? o.name.slice(0, 20) + "…" : o.name}</div>
                     ))}
+                    {n.type === "custom" && customSteps(n).slice(0, 8).map((s, i) => (
+                      <div key={i} style={S.menuRow}>{STEP_KINDS[s.kind]?.icon} {stepSummary(s).length > 22 ? stepSummary(s).slice(0, 22) + "…" : stepSummary(s)}</div>
+                    ))}
                   </div>
                   {n.type !== "welcome" && (
                     <div style={{
@@ -803,9 +944,22 @@ function Builder({ user, onLogout }) {
             {!selNode && <div style={{ fontSize: 12, color: "#7d9c8c" }}>Select a block on the canvas to edit its text and behavior.</div>}
             {selNode && (
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: NODE_TYPES[selNode.type].color, marginBottom: 10 }}>
-                  {NODE_TYPES[selNode.type].icon} {NODE_TYPES[selNode.type].label}
+                <div style={{ fontSize: 13, fontWeight: 800, color: typeInfo(selNode).color, marginBottom: 10 }}>
+                  {typeInfo(selNode).icon} {typeInfo(selNode).label}
                 </div>
+
+                {selNode.type === "custom" && (<>
+                  <Field label="Block name">
+                    <input style={S.input} value={selNode.config.label || ""}
+                      onChange={(e) => updateConfig(selNode.id, { label: e.target.value })} />
+                  </Field>
+                  <Field label="Steps (run in order)">
+                    <StepsEditor steps={customSteps(selNode)} onChange={(steps) => updateConfig(selNode.id, { steps })} />
+                  </Field>
+                  <div style={{ fontSize: 11, color: "#7d9c8c" }}>
+                    A Choices step must be last — each choice becomes an output dot. Edits here change only this copy, not your saved block.
+                  </div>
+                </>)}
 
                 {(selNode.type === "welcome" || selNode.type === "goodbye") && (
                   <Field label="Message">
@@ -867,7 +1021,7 @@ function Builder({ user, onLogout }) {
                   </Field>
                 )}
 
-                {!["welcome", "goodbye", "collect", "faq"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
+                {!["welcome", "goodbye", "collect", "faq", "custom"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
                   <GenericConfig node={selNode} updateConfig={updateConfig} />
                 )}
 
@@ -1094,6 +1248,91 @@ function Builder({ user, onLogout }) {
   );
 }
 
+/* ---------- Block Lab: step editor (shared by lab modal + inspector) ---------- */
+function StepsEditor({ steps, onChange }) {
+  const S = styles;
+  const patch = (i, p) => onChange(steps.map((s, j) => (j === i ? { ...s, ...p } : s)));
+  const move = (i, d) => {
+    const j = i + d;
+    if (j < 0 || j >= steps.length) return;
+    const next = [...steps];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+  const hasChoice = steps.some((s) => s.kind === "choice");
+  return (
+    <div>
+      {steps.map((s, i) => (
+        <div key={i} style={{ marginBottom: 8, padding: 8, background: "#0d1b13", borderRadius: 8, border: "1px solid #1d3328" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#9be8c0", flex: 1 }}>
+              {i + 1}. {STEP_KINDS[s.kind]?.icon} {STEP_KINDS[s.kind]?.label}
+            </span>
+            <button style={S.miniBtn} title="Move up" onClick={() => move(i, -1)}>↑</button>
+            <button style={S.miniBtn} title="Move down" onClick={() => move(i, 1)}>↓</button>
+            <button style={{ ...S.miniBtn, color: "#FF7A7A" }} title="Remove step" onClick={() => onChange(steps.filter((_, j) => j !== i))}>✕</button>
+          </div>
+          {s.kind === "say" && (
+            <textarea style={S.textarea} rows={2} value={s.message} placeholder="Message to send — {vars} allowed"
+              onChange={(e) => patch(i, { message: e.target.value })} />
+          )}
+          {s.kind === "ask" && (<>
+            <textarea style={{ ...S.textarea, marginBottom: 6 }} rows={2} value={s.question} placeholder="Question to ask"
+              onChange={(e) => patch(i, { question: e.target.value })} />
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <input style={{ ...S.input, flex: 1 }} value={s.field} placeholder="save as variable"
+                onChange={(e) => patch(i, { field: e.target.value.replace(/\W/g, "") })} />
+              <select style={{ ...S.input, width: 110 }} value={s.validate || "text"}
+                onChange={(e) => patch(i, { validate: e.target.value })}>
+                <option value="text">any text</option>
+                <option value="number">number</option>
+                <option value="email">email</option>
+                <option value="phone">phone</option>
+              </select>
+            </div>
+            <input style={S.input} value={s.ack || ""} placeholder={"reply after saving (optional) — e.g. Got it, {" + (s.field || "value") + "}!"}
+              onChange={(e) => patch(i, { ack: e.target.value })} />
+          </>)}
+          {s.kind === "set" && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input style={{ ...S.input, flex: 1 }} value={s.field} placeholder="variable"
+                onChange={(e) => patch(i, { field: e.target.value.replace(/\W/g, "") })} />
+              <input style={{ ...S.input, flex: 1 }} value={s.value} placeholder="value"
+                onChange={(e) => patch(i, { value: e.target.value })} />
+            </div>
+          )}
+          {s.kind === "choice" && (<>
+            <input style={{ ...S.input, marginBottom: 6 }} value={s.prompt} placeholder="Prompt"
+              onChange={(e) => patch(i, { prompt: e.target.value })} />
+            {(s.options || []).map((o, oi) => (
+              <div key={oi} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                <input style={{ ...S.input, flex: 1 }} value={o}
+                  onChange={(e) => patch(i, { options: s.options.map((x, xj) => (xj === oi ? e.target.value : x)) })} />
+                {s.options.length > 1 && (
+                  <button style={S.miniBtn} onClick={() => patch(i, { options: s.options.filter((_, xj) => xj !== oi) })}>✕</button>
+                )}
+              </div>
+            ))}
+            {(s.options || []).length < 8 && (
+              <button style={S.addBtn} onClick={() => patch(i, { options: [...(s.options || []), "New option"] })}>+ Add option</button>
+            )}
+            <div style={{ fontSize: 10.5, color: "#7d9c8c", marginTop: 4 }}>Each option becomes an output dot on the block.</div>
+          </>)}
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {Object.entries(STEP_KINDS).map(([kind, meta]) => (
+          <button key={kind} style={{ ...styles.miniBtn, opacity: kind === "choice" && hasChoice ? 0.4 : 1 }}
+            disabled={kind === "choice" && hasChoice}
+            onClick={() => onChange([...steps.filter((s) => s.kind !== "choice"), stepDefaults[kind](), ...steps.filter((s) => s.kind === "choice")])}>
+            + {meta.icon} {meta.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- small components ---------- */
 function Trunc({ text }) {
   return <div style={{ fontSize: 11.5, color: "#b9d6c7", lineHeight: 1.4 }}>{text.length > 62 ? text.slice(0, 62) + "…" : text}</div>;
@@ -1191,6 +1430,8 @@ const styles = {
   tab: { padding: "8px 14px", borderRadius: 8, border: "1px solid #1d3328", background: "transparent", color: "#8fae9d", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
   tabActive: { background: "#25D366", borderColor: "#25D366", color: "#06130b" },
   toast: { position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 99, padding: "8px 18px", borderRadius: 10, border: "1px solid", fontSize: 13, fontWeight: 700 },
+  overlay: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(4,10,7,.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
+  labCard: { width: 560, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto", background: "#0c1610", border: "1px solid #2a4535", borderRadius: 16, padding: 20, boxShadow: "0 24px 60px rgba(0,0,0,.6)" },
 
   designWrap: { flex: 1, display: "flex", minHeight: 0 },
   palette: { width: 230, padding: 14, borderRight: "1px solid #16281e", overflowY: "auto", background: "#0c1610", flexShrink: 0 },
