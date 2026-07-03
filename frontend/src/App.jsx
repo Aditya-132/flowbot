@@ -305,6 +305,18 @@ const bez = (a, b) => {
   return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
+
+// true below 860px — palette becomes a drawer, inspector a bottom sheet
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 860px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 860px)");
+    const onChange = (e) => setMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return mobile;
+}
 const nodeSummary = (n) => {
   const c = n.config || {};
   if (menuLikeTypes.has(n.type)) return `${c.prompt || "Choose"} · ${(c.options || []).join(", ")}`;
@@ -372,6 +384,8 @@ function Builder({ user, onAuthed, onLogout }) {
   const [customBlocks, setCustomBlocks] = useState([]);
   const [blockLab, setBlockLab] = useState(null); // null | draft {id?, name, icon, color, descr, steps}
   const [authOpen, setAuthOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [showPalette, setShowPalette] = useState(false); // mobile drawer
   const pendingAuth = useRef(null); // action to resume after a successful login
   const userRef = useRef(user);
   const canvasRef = useRef(null);
@@ -730,18 +744,18 @@ function Builder({ user, onAuthed, onLogout }) {
     <div style={S.app}>
       {/* ---------- header ---------- */}
       <div style={S.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, flexWrap: "wrap" }}>
           <div style={S.logo}>⚡</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 16 }}>FlowBot</div>
-            <div style={{ fontSize: 10.5, color: "#8fae9d" }}>flowchart → WhatsApp bot · no-AI runtime</div>
+            {!isMobile && <div style={{ fontSize: 10.5, color: "#8fae9d" }}>flowchart → WhatsApp bot · no-AI runtime</div>}
           </div>
-          <input style={{ ...S.input, width: 190 }} value={botName}
+          <input style={{ ...S.input, width: isMobile ? 120 : 190 }} value={botName}
             onChange={(e) => { setBotName(e.target.value); markDirty(); }} placeholder="Bot name" />
           <button style={S.ghostBtn} onClick={saveFlow} disabled={busy}>
             {dirty ? "💾 Save*" : "✓ Saved"}
           </button>
-          <select style={{ ...S.input, width: 160 }} value=""
+          <select style={{ ...S.input, width: isMobile ? 130 : 160 }} value=""
             onChange={(e) => e.target.value && loadFlow(e.target.value)}>
             <option value="">📂 Open saved bot…</option>
             {savedFlows.map((f) => (
@@ -749,7 +763,7 @@ function Builder({ user, onAuthed, onLogout }) {
             ))}
           </select>
           <button style={S.ghostBtn} onClick={newFlow}>+ New</button>
-          <select style={{ ...S.input, width: 180 }} value=""
+          <select style={{ ...S.input, width: isMobile ? 130 : 180 }} value=""
             onChange={(e) => e.target.value && loadTemplate(e.target.value)}>
             <option value="">✨ Start from template…</option>
             {Object.entries(TEMPLATES).map(([k, t]) => (
@@ -757,9 +771,9 @@ function Builder({ user, onAuthed, onLogout }) {
             ))}
           </select>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {["1 · Design flow", "2 · Bot code", "3 · Activate & test"].map((t, i) => (
-            <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(tab === i ? S.tabActive : {}) }}>{t}</button>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
+            <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
           ))}
           {user ? (<>
             <span style={{ fontSize: 11.5, color: "#8fae9d", marginLeft: 8, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
@@ -831,15 +845,19 @@ function Builder({ user, onAuthed, onLogout }) {
       {/* ============ TAB 1: DESIGN ============ */}
       {tab === 0 && (
         <div style={S.designWrap}>
-          <div style={S.palette}>
+          {isMobile && showPalette && <div style={S.drawerBackdrop} onClick={() => setShowPalette(false)} />}
+          <div style={isMobile ? { ...S.palette, ...S.paletteDrawer, ...(showPalette ? {} : { display: "none" }) } : S.palette}>
+            {isMobile && (
+              <button style={{ ...S.ghostBtn, width: "100%", marginBottom: 10 }} onClick={() => setShowPalette(false)}>✕ Close blocks</button>
+            )}
             <div style={S.paneTitle}>🧪 Your custom blocks</div>
             <button style={{ ...S.addBtn, marginBottom: 8 }} onClick={() => setBlockLab({ name: "My block", icon: "🧪", color: "#9BE8C0", descr: "", steps: [stepDefaults.say()] })}>
               ＋ Create your own block
             </button>
             {customBlocks.map((b) => (
               <div key={b.id} style={{ ...S.paletteItem, position: "relative", paddingRight: 30 }}>
-                <span style={{ fontSize: 18, cursor: "pointer" }} onClick={() => addCustomNode(b)}>{b.icon}</span>
-                <span style={{ cursor: "pointer", flex: 1 }} onClick={() => addCustomNode(b)}>
+                <span style={{ fontSize: 18, cursor: "pointer" }} onClick={() => { addCustomNode(b); if (isMobile) setShowPalette(false); }}>{b.icon}</span>
+                <span style={{ cursor: "pointer", flex: 1 }} onClick={() => { addCustomNode(b); if (isMobile) setShowPalette(false); }}>
                   <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: b.color }}>{b.name}</span>
                   <span style={{ display: "block", fontSize: 11, color: "#8fae9d", lineHeight: 1.35 }}>
                     {b.descr || `${(b.steps || []).length} step${(b.steps || []).length === 1 ? "" : "s"} · tap to add`}
@@ -862,7 +880,7 @@ function Builder({ user, onAuthed, onLogout }) {
               38 deterministic WhatsApp blocks backed by pre-written server handlers.
             </div>
             {Object.entries(NODE_TYPES).map(([k, t]) => (
-              <button key={k} onClick={() => addNode(k)} style={S.paletteItem}>
+              <button key={k} onClick={() => { addNode(k); if (isMobile) setShowPalette(false); }} style={S.paletteItem}>
                 <span style={{ fontSize: 18 }}>{t.icon}</span>
                 <span>
                   <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: t.color }}>{t.label}</span>
@@ -980,9 +998,15 @@ function Builder({ user, onAuthed, onLogout }) {
               );
             })}
             {!hasWelcome && <div style={S.warnFloat}>⚠️ Add a Welcome block — it's the bot's entry point.</div>}
+            {isMobile && (
+              <button style={S.fab} onClick={() => setShowPalette(true)}>🧱 Blocks</button>
+            )}
           </div>
 
-          <div style={S.inspector}>
+          <div style={isMobile ? { ...S.inspector, ...S.inspectorSheet, ...(selNode ? {} : { display: "none" }) } : S.inspector}>
+            {isMobile && selNode && (
+              <button style={{ ...S.ghostBtn, width: "100%", marginBottom: 10 }} onClick={() => setSel(null)}>✓ Done</button>
+            )}
             <div style={S.paneTitle}>Block settings</div>
             {!selNode && <div style={{ fontSize: 12, color: "#7d9c8c" }}>Select a block on the canvas to edit its text and behavior.</div>}
             {selNode && (
@@ -1482,10 +1506,11 @@ const styles = {
   paletteItem: { display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", padding: 10, marginBottom: 8, borderRadius: 10, border: "1px solid #1d3328", background: "#0d1b13", cursor: "pointer", color: "inherit", fontFamily: "inherit" },
   tipBox: { marginTop: 10, padding: 10, fontSize: 11, color: "#8fae9d", background: "#0d1b13", border: "1px dashed #2a4535", borderRadius: 10, lineHeight: 1.5 },
 
-  canvas: { flex: 1, position: "relative", overflow: "auto", backgroundImage: "radial-gradient(#1a2f22 1.2px, transparent 1.2px)", backgroundSize: "22px 22px", backgroundColor: "#0a120d", touchAction: "none" },
+  // canvas pans with touch; nodes set touchAction:none so dragging them doesn't scroll
+  canvas: { flex: 1, position: "relative", overflow: "auto", backgroundImage: "radial-gradient(#1a2f22 1.2px, transparent 1.2px)", backgroundSize: "22px 22px", backgroundColor: "#0a120d", touchAction: "pan-x pan-y", WebkitOverflowScrolling: "touch" },
   svg: { position: "absolute", top: 0, left: 0, pointerEvents: "none" },
 
-  node: { position: "absolute", width: NODE_W, background: "#0f1d14", border: "1.5px solid #1d3328", borderRadius: 12, userSelect: "none" },
+  node: { position: "absolute", width: NODE_W, background: "#0f1d14", border: "1.5px solid #1d3328", borderRadius: 12, userSelect: "none", touchAction: "none" },
   nodeHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", fontSize: 12, fontWeight: 800, borderRadius: "10px 10px 0 0", cursor: "grab" },
   entryBadge: { fontSize: 9, fontWeight: 800, background: "#25D366", color: "#06130b", padding: "1px 6px", borderRadius: 6 },
   nodeBody: { padding: "8px 10px" },
@@ -1495,6 +1520,12 @@ const styles = {
   warnFloat: { position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", background: "#3a2a10", border: "1px solid #F5B841", color: "#F5B841", fontSize: 12, padding: "6px 14px", borderRadius: 8 },
 
   inspector: { width: 260, padding: 14, borderLeft: "1px solid #16281e", overflowY: "auto", background: "#0c1610", flexShrink: 0 },
+
+  /* mobile: palette slides in from the left, inspector rises as a bottom sheet */
+  paletteDrawer: { position: "fixed", top: 0, left: 0, bottom: 0, width: "min(320px, 85vw)", zIndex: 70, borderRight: "1px solid #2a4535", boxShadow: "12px 0 40px rgba(0,0,0,.55)" },
+  drawerBackdrop: { position: "fixed", inset: 0, zIndex: 65, background: "rgba(4,10,7,.6)" },
+  inspectorSheet: { position: "fixed", left: 0, right: 0, bottom: 0, width: "auto", maxHeight: "58vh", zIndex: 60, borderLeft: "none", borderTop: "1px solid #2a4535", borderRadius: "16px 16px 0 0", boxShadow: "0 -12px 40px rgba(0,0,0,.55)" },
+  fab: { position: "fixed", bottom: 16, left: 16, zIndex: 40, padding: "12px 18px", fontSize: 14, fontWeight: 800, borderRadius: 999, border: "none", background: "#25D366", color: "#06130b", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 8px 24px rgba(0,0,0,.5)" },
   input: { boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #2a4535", background: "#0a120d", color: "#e6f4ec", fontSize: 12.5, outline: "none", fontFamily: "inherit", width: "100%" },
   textarea: { width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #2a4535", background: "#0a120d", color: "#e6f4ec", fontSize: 12.5, outline: "none", resize: "vertical", fontFamily: "inherit" },
   miniBtn: { padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #2a4535", background: "#0d1b13", color: "#8fae9d", cursor: "pointer", fontFamily: "inherit" },
@@ -1513,7 +1544,7 @@ const styles = {
   credCard: { width: 360, maxWidth: "100%", background: "#0c1610", border: "1px solid #16281e", borderRadius: 14, padding: 18 },
   liveBox: { marginTop: 14, padding: 12, borderRadius: 10, background: "#0d1f14", border: "1px solid #2fbf71" },
 
-  phone: { width: 340, maxWidth: "100%", height: 560, display: "flex", flexDirection: "column", background: "#0c1610", border: "1px solid #16281e", borderRadius: 22, overflow: "hidden", boxShadow: "0 20px 50px rgba(0,0,0,.5)" },
+  phone: { width: 340, maxWidth: "100%", height: "min(560px, calc(100dvh - 180px))", minHeight: 380, display: "flex", flexDirection: "column", background: "#0c1610", border: "1px solid #16281e", borderRadius: 22, overflow: "hidden", boxShadow: "0 20px 50px rgba(0,0,0,.5)" },
   phoneHeader: { display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#128C7E22", borderBottom: "1px solid #16281e" },
   avatar: { width: 32, height: 32, borderRadius: "50%", background: "#128C7E", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 },
   phoneBody: { flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 7, backgroundImage: "radial-gradient(#14261a 1px, transparent 1px)", backgroundSize: "16px 16px" },

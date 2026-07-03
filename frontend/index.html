@@ -61,7 +61,11 @@
     }
     </script>
 
-    <style>html,body,#root{margin:0;height:100%;}</style>
+    <style>
+      html,body,#root{margin:0;height:100%;}
+      /* 16px inputs stop iOS Safari from zooming in on focus */
+      @media (max-width: 860px){ input, textarea, select { font-size: 16px !important; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>
