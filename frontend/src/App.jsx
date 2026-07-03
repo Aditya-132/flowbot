@@ -40,7 +40,7 @@ const NODE_TYPES = {
     defaults: () => ({ question: "Please share your name:", field: "name" }),
   },
   goodbye: {
-    label: "Goodbye / Handoff", icon: "🤝", color: "#FF7A7A",
+    label: "Goodbye / Handoff", icon: "🤝", color: "#ef4444",
     desc: "Ends the conversation. Supports {variables} like {name}.",
     defaults: () => ({ message: "Thanks {name}! Our team will reach out shortly. 🙌" }),
     outputs: () => 0,
@@ -265,10 +265,17 @@ const lastChoice = (n) => {
   return last && last.kind === "choice" ? last : null;
 };
 
+// darkens a block accent color so it stays readable as text on light backgrounds
+const shade = (hex, f = 0.55) => {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${(((n >> 16) & 255) * f) | 0},${(((n >> 8) & 255) * f) | 0},${((n & 255) * f) | 0})`;
+};
+
 // resolves look & label for both built-in and user-made blocks
 const typeInfo = (n) =>
   n.type === "custom"
-    ? { label: n.config?.label || "Custom block", icon: n.config?.icon || "🧩", color: n.config?.color || "#9be8c0", desc: "Your custom block" }
+    ? { label: n.config?.label || "Custom block", icon: n.config?.icon || "🧩", color: n.config?.color || "#0f766e", desc: "Your custom block" }
     : NODE_TYPES[n.type];
 
 /* ---------- geometry ---------- */
@@ -349,7 +356,7 @@ export default function App() {
 
   if (user === undefined) {
     return (
-      <div style={{ ...styles.app, alignItems: "center", justifyContent: "center", fontSize: 14, color: "#8fae9d" }}>
+      <div style={{ ...styles.app, alignItems: "center", justifyContent: "center", fontSize: 14, color: "#64748b" }}>
         Loading…
       </div>
     );
@@ -748,7 +755,7 @@ function Builder({ user, onAuthed, onLogout }) {
           <div style={S.logo}>⚡</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 16 }}>FlowBot</div>
-            {!isMobile && <div style={{ fontSize: 10.5, color: "#8fae9d" }}>flowchart → WhatsApp bot · no-AI runtime</div>}
+            {!isMobile && <div style={{ fontSize: 10.5, color: "#64748b" }}>flowchart → WhatsApp bot · no-AI runtime</div>}
           </div>
           <input style={{ ...S.input, width: isMobile ? 120 : 190 }} value={botName}
             onChange={(e) => { setBotName(e.target.value); markDirty(); }} placeholder="Bot name" />
@@ -776,7 +783,7 @@ function Builder({ user, onAuthed, onLogout }) {
             <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
           ))}
           {user ? (<>
-            <span style={{ fontSize: 11.5, color: "#8fae9d", marginLeft: 8, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            <span style={{ fontSize: 11.5, color: "#64748b", marginLeft: 8, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               title={user.email}>
               👤 {user.name || user.email}
             </span>
@@ -787,7 +794,7 @@ function Builder({ user, onAuthed, onLogout }) {
         </div>
       </div>
 
-      {toast && <div style={{ ...S.toast, background: toast.err ? "#3a1414" : "#0d2a1a", borderColor: toast.err ? "#FF7A7A" : "#2fbf71", color: toast.err ? "#ffb3b3" : "#9be8c0" }}>{toast.msg}</div>}
+      {toast && <div style={{ ...S.toast, background: toast.err ? "#fef2f2" : "#ecfdf5", borderColor: toast.err ? "#ef4444" : "#059669", color: toast.err ? "#b91c1c" : "#0f766e" }}>{toast.msg}</div>}
 
       {/* ============ AUTH MODAL: only when an action needs an account ============ */}
       {authOpen && (
@@ -803,7 +810,7 @@ function Builder({ user, onAuthed, onLogout }) {
               <div style={{ fontSize: 15, fontWeight: 800 }}>🧪 Block Lab — {blockLab.id ? "edit block" : "invent a new block"}</div>
               <button style={S.miniBtn} onClick={() => setBlockLab(null)}>✕ close</button>
             </div>
-            <div style={{ fontSize: 11.5, color: "#8fae9d", marginBottom: 12, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11.5, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
               Chain simple steps into any feature you can imagine. It becomes a reusable block in your palette
               and runs everywhere — simulator, live WhatsApp, exported code. Use {"{variables}"} anywhere.
             </div>
@@ -825,9 +832,9 @@ function Builder({ user, onAuthed, onLogout }) {
             </Field>
             <Field label="Color">
               <div style={{ display: "flex", gap: 6 }}>
-                {["#9BE8C0", "#F5B841", "#4EA8DE", "#B983FF", "#FF7A7A", "#34D399", "#F472B6", "#67E8F9"].map((c) => (
+                {["#9BE8C0", "#F5B841", "#4EA8DE", "#B983FF", "#ef4444", "#34D399", "#F472B6", "#67E8F9"].map((c) => (
                   <button key={c} onClick={() => setBlockLab({ ...blockLab, color: c })}
-                    style={{ width: 26, height: 26, borderRadius: 8, background: c, cursor: "pointer", border: blockLab.color === c ? "2.5px solid #e6f4ec" : "2.5px solid transparent" }} />
+                    style={{ width: 26, height: 26, borderRadius: 8, background: c, cursor: "pointer", border: blockLab.color === c ? "2.5px solid #0f172a" : "2.5px solid transparent" }} />
                 ))}
               </div>
             </Field>
@@ -858,33 +865,33 @@ function Builder({ user, onAuthed, onLogout }) {
               <div key={b.id} style={{ ...S.paletteItem, position: "relative", paddingRight: 30 }}>
                 <span style={{ fontSize: 18, cursor: "pointer" }} onClick={() => { addCustomNode(b); if (isMobile) setShowPalette(false); }}>{b.icon}</span>
                 <span style={{ cursor: "pointer", flex: 1 }} onClick={() => { addCustomNode(b); if (isMobile) setShowPalette(false); }}>
-                  <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: b.color }}>{b.name}</span>
-                  <span style={{ display: "block", fontSize: 11, color: "#8fae9d", lineHeight: 1.35 }}>
+                  <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: shade(b.color) }}>{b.name}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "#64748b", lineHeight: 1.35 }}>
                     {b.descr || `${(b.steps || []).length} step${(b.steps || []).length === 1 ? "" : "s"} · tap to add`}
                   </span>
                 </span>
                 <button title="Edit block" style={{ ...S.miniBtn, position: "absolute", right: 4, top: 6, padding: "2px 5px" }}
                   onClick={(e) => { e.stopPropagation(); setBlockLab({ ...b, steps: JSON.parse(JSON.stringify(b.steps || [])) }); }}>✎</button>
-                <button title="Delete block" style={{ ...S.miniBtn, position: "absolute", right: 4, top: 30, padding: "2px 5px", color: "#FF7A7A" }}
+                <button title="Delete block" style={{ ...S.miniBtn, position: "absolute", right: 4, top: 30, padding: "2px 5px", color: "#ef4444" }}
                   onClick={async (e) => { e.stopPropagation(); await api.deleteBlock(b.id).catch(() => {}); refreshBlocks(); }}>✕</button>
               </div>
             ))}
             {!customBlocks.length && (
-              <div style={{ fontSize: 11, color: "#7d9c8c", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>
                 Dream up any feature — a quiz, an EMI enquiry, a visitor pass — and build it from simple steps. It runs everywhere: simulator, live bot, exported ZIP.
               </div>
             )}
 
             <div style={{ ...S.paneTitle, marginTop: 14 }}>Feature blocks</div>
-            <div style={{ fontSize: 11, color: "#7d9c8c", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>
               38 deterministic WhatsApp blocks backed by pre-written server handlers.
             </div>
             {Object.entries(NODE_TYPES).map(([k, t]) => (
               <button key={k} onClick={() => { addNode(k); if (isMobile) setShowPalette(false); }} style={S.paletteItem}>
                 <span style={{ fontSize: 18 }}>{t.icon}</span>
                 <span>
-                  <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: t.color }}>{t.label}</span>
-                  <span style={{ display: "block", fontSize: 11, color: "#8fae9d", lineHeight: 1.35 }}>{t.desc}</span>
+                  <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: shade(t.color) }}>{t.label}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "#64748b", lineHeight: 1.35 }}>{t.desc}</span>
                 </span>
               </button>
             ))}
@@ -911,12 +918,12 @@ function Builder({ user, onAuthed, onLogout }) {
                 const label = outputCount(a) > 1 ? portLabel(a, e.fromPort) : "";
                 return (
                   <g key={e.id}>
-                    <path d={d} stroke={hot ? "#FF7A7A" : "#2fbf71"} strokeWidth={hot ? 3 : 2.5}
+                    <path d={d} stroke={hot ? "#ef4444" : "#059669"} strokeWidth={hot ? 3 : 2.5}
                       strokeDasharray="7 5" fill="none" style={{ pointerEvents: "none" }}>
                       <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1s" repeatCount="indefinite" />
                     </path>
                     {label && (
-                      <text x={pa.x + 12} y={pa.y - 7} fill={hot ? "#FF7A7A" : "#7d9c8c"} fontSize="10" style={{ pointerEvents: "none", userSelect: "none" }}>
+                      <text x={pa.x + 12} y={pa.y - 7} fill={hot ? "#ef4444" : "#64748b"} fontSize="10" fontWeight="700" style={{ pointerEvents: "none", userSelect: "none" }}>
                         {label.length > 18 ? label.slice(0, 18) + "…" : label}
                       </text>
                     )}
@@ -932,7 +939,7 @@ function Builder({ user, onAuthed, onLogout }) {
               })}
               {connecting && (
                 <path d={bez(outPortPos(nodes.find((n) => n.id === connecting.from), connecting.port), { x: connecting.x, y: connecting.y })}
-                  stroke="#9be8c0" strokeWidth="2" strokeDasharray="4 4" fill="none" style={{ pointerEvents: "none" }} />
+                  stroke="#0f766e" strokeWidth="2" strokeDasharray="4 4" fill="none" style={{ pointerEvents: "none" }} />
               )}
             </svg>
 
@@ -944,8 +951,8 @@ function Builder({ user, onAuthed, onLogout }) {
                 <div key={n.id} data-node-id={n.id}
                   style={{
                     ...S.node, left: n.x, top: n.y, height: nodeH(n),
-                    borderColor: isConnectTarget ? "#9be8c0" : selected ? t.color : "#1d3328",
-                    boxShadow: selected ? `0 0 0 2px ${t.color}55, 0 10px 24px rgba(0,0,0,.45)` : "0 8px 20px rgba(0,0,0,.35)",
+                    borderColor: isConnectTarget ? "#0f766e" : selected ? t.color : "#e2e8f0",
+                    boxShadow: selected ? `0 0 0 2px ${t.color}55, 0 10px 24px rgba(15,23,42,.18)` : "0 8px 20px rgba(15,23,42,.08)",
                     cursor: isConnectTarget ? "crosshair" : undefined,
                   }}
                   onClick={(e) => {
@@ -953,7 +960,7 @@ function Builder({ user, onAuthed, onLogout }) {
                     if (connecting) { connectTo(n.id); return; }
                     setSel(n.id);
                   }}>
-                  <div style={{ ...S.nodeHeader, background: t.color + "22", color: t.color }} onPointerDown={(e) => { if (!connecting) startDrag(e, n); }}>
+                  <div style={{ ...S.nodeHeader, background: t.color + "30", color: shade(t.color) }} onPointerDown={(e) => { if (!connecting) startDrag(e, n); }}>
                     <span>{t.icon} {t.label}</span>
                     {n.type === "welcome" && <span style={S.entryBadge}>ENTRY</span>}
                   </div>
@@ -979,8 +986,8 @@ function Builder({ user, onAuthed, onLogout }) {
                   {n.type !== "welcome" && (
                     <div style={{
                       ...S.port, left: -7, top: 11,
-                      background: isConnectTarget ? "#9be8c0" : "#5c8a72",
-                      boxShadow: isConnectTarget ? "0 0 0 4px #9be8c044" : "none",
+                      background: isConnectTarget ? "#0f766e" : "#94a3b8",
+                      boxShadow: isConnectTarget ? "0 0 0 4px #0f766e33" : "none",
                       transform: isConnectTarget ? "scale(1.3)" : "none",
                     }}
                       onClick={(e) => { e.stopPropagation(); connectTo(n.id); }} title="input — drop or click a wire here" />
@@ -1008,10 +1015,10 @@ function Builder({ user, onAuthed, onLogout }) {
               <button style={{ ...S.ghostBtn, width: "100%", marginBottom: 10 }} onClick={() => setSel(null)}>✓ Done</button>
             )}
             <div style={S.paneTitle}>Block settings</div>
-            {!selNode && <div style={{ fontSize: 12, color: "#7d9c8c" }}>Select a block on the canvas to edit its text and behavior.</div>}
+            {!selNode && <div style={{ fontSize: 12, color: "#94a3b8" }}>Select a block on the canvas to edit its text and behavior.</div>}
             {selNode && (
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: typeInfo(selNode).color, marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: shade(typeInfo(selNode).color), marginBottom: 10 }}>
                   {typeInfo(selNode).icon} {typeInfo(selNode).label}
                 </div>
 
@@ -1023,7 +1030,7 @@ function Builder({ user, onAuthed, onLogout }) {
                   <Field label="Steps (run in order)">
                     <StepsEditor steps={customSteps(selNode)} onChange={(steps) => updateConfig(selNode.id, { steps })} />
                   </Field>
-                  <div style={{ fontSize: 11, color: "#7d9c8c" }}>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>
                     A Choices step must be last — each choice becomes an output dot. Edits here change only this copy, not your saved block.
                   </div>
                 </>)}
@@ -1044,7 +1051,7 @@ function Builder({ user, onAuthed, onLogout }) {
                     <input style={S.input} value={selNode.config.field}
                       onChange={(e) => updateConfig(selNode.id, { field: e.target.value.replace(/\W/g, "") })} />
                   </Field>
-                  <div style={{ fontSize: 11, color: "#7d9c8c" }}>Use later as {"{" + selNode.config.field + "}"} in a Goodbye block.</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>Use later as {"{" + selNode.config.field + "}"} in a Goodbye block.</div>
                 </>)}
 
                 {menuLikeTypes.has(selNode.type) && (<>
@@ -1073,7 +1080,7 @@ function Builder({ user, onAuthed, onLogout }) {
                 {selNode.type === "faq" && (
                   <Field label="Keyword → reply pairs">
                     {selNode.config.pairs.map((p, i) => (
-                      <div key={i} style={{ marginBottom: 8, padding: 8, background: "#0d1b13", borderRadius: 8, border: "1px solid #1d3328" }}>
+                      <div key={i} style={{ marginBottom: 8, padding: 8, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
                         <input style={{ ...S.input, marginBottom: 6 }} value={p.k} placeholder="keyword"
                           onChange={(e) => updateConfig(selNode.id, { pairs: selNode.config.pairs.map((x, j) => (j === i ? { ...x, k: e.target.value } : x)) })} />
                         <textarea style={S.textarea} rows={2} value={p.a} placeholder="reply"
@@ -1104,8 +1111,8 @@ function Builder({ user, onAuthed, onLogout }) {
         <div style={S.codeWrap}>
           <div style={S.codeBar}>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 14 }}>Generated bot code — <span style={{ color: "#2fbf71" }}>server.js</span></div>
-              <div style={{ fontSize: 11.5, color: "#8fae9d", marginTop: 2 }}>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>Generated bot code — <span style={{ color: "#059669" }}>server.js</span></div>
+              <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 2 }}>
                 Assembled on the server from fixed templates per block + your flow as JSON. Deterministic — zero AI. Runs standalone with just <code style={S.inlineCode}>npm install express</code>.
               </div>
             </div>
@@ -1132,7 +1139,7 @@ function Builder({ user, onAuthed, onLogout }) {
             </div>
 
             {provider === "meta" && (<>
-              <div style={{ fontSize: 12, color: "#8fae9d", marginBottom: 12, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
                 From <b>developers.facebook.com</b> → your app → <b>WhatsApp → API Setup</b>. The free test number needs no credit card. The access token is never sent back to the browser.
               </div>
               <Field label="Access Token">
@@ -1152,7 +1159,7 @@ function Builder({ user, onAuthed, onLogout }) {
             </>)}
 
             {provider === "green" && (<>
-              <div style={{ fontSize: 12, color: "#8fae9d", marginBottom: 12, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
                 From <b>console.green-api.com</b> → create a developer instance → scan QR with WhatsApp Linked Devices. REST token stays on your backend. Same unofficial-API ban-risk caveat applies.
               </div>
               <Field label="ID Instance">
@@ -1176,7 +1183,7 @@ function Builder({ user, onAuthed, onLogout }) {
             </>)}
 
             {provider === "whapi" && (<>
-              <div style={{ fontSize: 12, color: "#8fae9d", marginBottom: 12, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
                 From <b>panel.whapi.cloud</b> → create a sandbox/channel → pair by QR → copy API token. Token stays on your backend. Same linked-device ban-risk caveat applies.
               </div>
               <Field label="API Token">
@@ -1196,7 +1203,7 @@ function Builder({ user, onAuthed, onLogout }) {
             </>)}
 
             {provider === "twilio" && (<>
-              <div style={{ fontSize: 12, color: "#8fae9d", marginBottom: 12, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
                 From <b>Twilio Console → WhatsApp Sandbox</b>. Stored on your backend; the auth token is never sent back to the browser.
               </div>
               <Field label="Account SID">
@@ -1221,8 +1228,8 @@ function Builder({ user, onAuthed, onLogout }) {
 
             {activated && botId && (
               <div style={S.liveBox}>
-                <div style={{ fontWeight: 800, color: "#2fbf71", marginBottom: 6 }}>● Bot is live on this backend</div>
-                <div style={{ fontSize: 12, color: "#b9d6c7", lineHeight: 1.7 }}>
+                <div style={{ fontWeight: 800, color: "#059669", marginBottom: 6 }}>● Bot is live on this backend</div>
+                <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.7 }}>
                   {provider === "meta" ? (<>
                     Callback URL (paste in Meta App → WhatsApp → Configuration):
                     <div style={{ ...S.inlineCode, display: "block", padding: 8, margin: "6px 0", wordBreak: "break-all" }}>
@@ -1280,8 +1287,8 @@ function Builder({ user, onAuthed, onLogout }) {
             <div style={S.phoneHeader}>
               <div style={S.avatar}>🤖</div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 13 }}>{botName}</div>
-                <div style={{ fontSize: 10.5, color: activated ? "#9be8c0" : "#8fae9d" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#ffffff" }}>{botName}</div>
+                <div style={{ fontSize: 10.5, color: activated ? "#d9fdd3" : "#d3ece4" }}>
                   {activated ? "online · live webhook" : botId ? "test mode · backend engine" : "save the flow to test"}
                 </div>
               </div>
@@ -1289,7 +1296,7 @@ function Builder({ user, onAuthed, onLogout }) {
             </div>
             <div style={S.phoneBody}>
               {chat.length === 0 && (
-                <div style={{ textAlign: "center", fontSize: 12, color: "#7d9c8c", marginTop: 60 }}>
+                <div style={{ textAlign: "center", fontSize: 12, color: "#8a8375", marginTop: 60 }}>
                   The simulator hits <b>the same backend engine</b><br />that serves the real provider webhook.
                 </div>
               )}
@@ -1330,14 +1337,14 @@ function StepsEditor({ steps, onChange }) {
   return (
     <div>
       {steps.map((s, i) => (
-        <div key={i} style={{ marginBottom: 8, padding: 8, background: "#0d1b13", borderRadius: 8, border: "1px solid #1d3328" }}>
+        <div key={i} style={{ marginBottom: 8, padding: 8, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: "#9be8c0", flex: 1 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#0f766e", flex: 1 }}>
               {i + 1}. {STEP_KINDS[s.kind]?.icon} {STEP_KINDS[s.kind]?.label}
             </span>
             <button style={S.miniBtn} title="Move up" onClick={() => move(i, -1)}>↑</button>
             <button style={S.miniBtn} title="Move down" onClick={() => move(i, 1)}>↓</button>
-            <button style={{ ...S.miniBtn, color: "#FF7A7A" }} title="Remove step" onClick={() => onChange(steps.filter((_, j) => j !== i))}>✕</button>
+            <button style={{ ...S.miniBtn, color: "#ef4444" }} title="Remove step" onClick={() => onChange(steps.filter((_, j) => j !== i))}>✕</button>
           </div>
           {s.kind === "say" && (
             <textarea style={S.textarea} rows={2} value={s.message} placeholder="Message to send — {vars} allowed"
@@ -1383,7 +1390,7 @@ function StepsEditor({ steps, onChange }) {
             {(s.options || []).length < 8 && (
               <button style={S.addBtn} onClick={() => patch(i, { options: [...(s.options || []), "New option"] })}>+ Add option</button>
             )}
-            <div style={{ fontSize: 10.5, color: "#7d9c8c", marginTop: 4 }}>Each option becomes an output dot on the block.</div>
+            <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 4 }}>Each option becomes an output dot on the block.</div>
           </>)}
         </div>
       ))}
@@ -1402,12 +1409,12 @@ function StepsEditor({ steps, onChange }) {
 
 /* ---------- small components ---------- */
 function Trunc({ text }) {
-  return <div style={{ fontSize: 11.5, color: "#b9d6c7", lineHeight: 1.4 }}>{text.length > 62 ? text.slice(0, 62) + "…" : text}</div>;
+  return <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.4 }}>{text.length > 62 ? text.slice(0, 62) + "…" : text}</div>;
 }
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#8fae9d", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5 }}>{label}</div>
       {children}
     </div>
   );
@@ -1452,7 +1459,7 @@ function ArrayEditor({ value, onChange }) {
   return (
     <div>
       {value.map((item, idx) => (
-        <div key={idx} style={{ marginBottom: 8, padding: 8, background: "#0d1b13", borderRadius: 8, border: "1px solid #1d3328" }}>
+        <div key={idx} style={{ marginBottom: 8, padding: 8, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
           {isObjectList ? Object.entries(item).map(([k, v]) => (
             <input key={k} style={{ ...styles.input, marginBottom: 6 }} placeholder={k} value={v}
               onChange={(e) => updateItem(idx, { ...item, [k]: e.target.value })} />
@@ -1488,68 +1495,68 @@ function demoEdges() {
   ];
 }
 
-/* ---------- styles ---------- */
+/* ---------- styles (light + colorful) ---------- */
 const mono = "'JetBrains Mono','SF Mono',Menlo,Consolas,monospace";
 const styles = {
-  app: { height: "100vh", display: "flex", flexDirection: "column", background: "#0a120d", color: "#e6f4ec", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", overflow: "hidden" },
-  header: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "10px 16px", borderBottom: "1px solid #16281e", background: "#0c1610" },
-  logo: { width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#25D366,#128C7E)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, boxShadow: "0 0 18px #25d36644" },
-  tab: { padding: "8px 14px", borderRadius: 8, border: "1px solid #1d3328", background: "transparent", color: "#8fae9d", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
-  tabActive: { background: "#25D366", borderColor: "#25D366", color: "#06130b" },
-  toast: { position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 99, padding: "8px 18px", borderRadius: 10, border: "1px solid", fontSize: 13, fontWeight: 700 },
-  overlay: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(4,10,7,.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
-  labCard: { width: 560, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto", background: "#0c1610", border: "1px solid #2a4535", borderRadius: 16, padding: 20, boxShadow: "0 24px 60px rgba(0,0,0,.6)" },
+  app: { height: "100vh", display: "flex", flexDirection: "column", background: "#eef2f9", color: "#0f172a", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", overflow: "hidden" },
+  header: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "10px 16px", borderBottom: "1px solid #e2e8f0", background: "#ffffff", boxShadow: "0 1px 10px rgba(15,23,42,.06)" },
+  logo: { width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#25D366,#128C7E)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, boxShadow: "0 4px 14px #25d36655" },
+  tab: { padding: "8px 14px", borderRadius: 8, border: "1px solid #dbe3ee", background: "#ffffff", color: "#64748b", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
+  tabActive: { background: "linear-gradient(135deg,#25D366,#128C7E)", borderColor: "transparent", color: "#ffffff", boxShadow: "0 4px 12px rgba(18,140,126,.35)" },
+  toast: { position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 99, padding: "8px 18px", borderRadius: 10, border: "1px solid", fontSize: 13, fontWeight: 700, boxShadow: "0 10px 30px rgba(15,23,42,.15)" },
+  overlay: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
+  labCard: { width: 560, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 20, boxShadow: "0 24px 60px rgba(15,23,42,.25)" },
 
   designWrap: { flex: 1, display: "flex", minHeight: 0 },
-  palette: { width: 230, padding: 14, borderRight: "1px solid #16281e", overflowY: "auto", background: "#0c1610", flexShrink: 0 },
-  paneTitle: { fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1, color: "#9be8c0", marginBottom: 8 },
-  paletteItem: { display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", padding: 10, marginBottom: 8, borderRadius: 10, border: "1px solid #1d3328", background: "#0d1b13", cursor: "pointer", color: "inherit", fontFamily: "inherit" },
-  tipBox: { marginTop: 10, padding: 10, fontSize: 11, color: "#8fae9d", background: "#0d1b13", border: "1px dashed #2a4535", borderRadius: 10, lineHeight: 1.5 },
+  palette: { width: 230, padding: 14, borderRight: "1px solid #e2e8f0", overflowY: "auto", background: "#ffffff", flexShrink: 0 },
+  paneTitle: { fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1, color: "#0f766e", marginBottom: 8 },
+  paletteItem: { display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", padding: 10, marginBottom: 8, borderRadius: 10, border: "1px solid #e5eaf2", background: "#f8fafc", cursor: "pointer", color: "inherit", fontFamily: "inherit" },
+  tipBox: { marginTop: 10, padding: 10, fontSize: 11, color: "#64748b", background: "#f0fdf4", border: "1px dashed #86d5ac", borderRadius: 10, lineHeight: 1.5 },
 
   // canvas pans with touch; nodes set touchAction:none so dragging them doesn't scroll
-  canvas: { flex: 1, position: "relative", overflow: "auto", backgroundImage: "radial-gradient(#1a2f22 1.2px, transparent 1.2px)", backgroundSize: "22px 22px", backgroundColor: "#0a120d", touchAction: "pan-x pan-y", WebkitOverflowScrolling: "touch" },
+  canvas: { flex: 1, position: "relative", overflow: "auto", backgroundImage: "radial-gradient(#c6d3e8 1.2px, transparent 1.2px)", backgroundSize: "22px 22px", backgroundColor: "#f1f5fb", touchAction: "pan-x pan-y", WebkitOverflowScrolling: "touch" },
   svg: { position: "absolute", top: 0, left: 0, pointerEvents: "none" },
 
-  node: { position: "absolute", width: NODE_W, background: "#0f1d14", border: "1.5px solid #1d3328", borderRadius: 12, userSelect: "none", touchAction: "none" },
+  node: { position: "absolute", width: NODE_W, background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: 12, userSelect: "none", touchAction: "none" },
   nodeHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", fontSize: 12, fontWeight: 800, borderRadius: "10px 10px 0 0", cursor: "grab" },
-  entryBadge: { fontSize: 9, fontWeight: 800, background: "#25D366", color: "#06130b", padding: "1px 6px", borderRadius: 6 },
+  entryBadge: { fontSize: 9, fontWeight: 800, background: "#25D366", color: "#ffffff", padding: "1px 6px", borderRadius: 6 },
   nodeBody: { padding: "8px 10px" },
-  menuRow: { fontSize: 11, color: "#e6f4ec", background: "#14261a", borderRadius: 6, padding: "3px 8px", marginTop: 5 },
-  chip: { display: "inline-block", marginTop: 6, fontSize: 10, fontFamily: mono, color: "#B983FF", background: "#B983FF1a", padding: "2px 8px", borderRadius: 6 },
-  port: { position: "absolute", width: 14, height: 14, borderRadius: "50%", border: "2.5px solid #0a120d", cursor: "crosshair", zIndex: 5 },
-  warnFloat: { position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", background: "#3a2a10", border: "1px solid #F5B841", color: "#F5B841", fontSize: 12, padding: "6px 14px", borderRadius: 8 },
+  menuRow: { fontSize: 11, color: "#334155", background: "#f1f5f9", borderRadius: 6, padding: "3px 8px", marginTop: 5 },
+  chip: { display: "inline-block", marginTop: 6, fontSize: 10, fontFamily: mono, color: "#7c3aed", background: "#7c3aed14", padding: "2px 8px", borderRadius: 6 },
+  port: { position: "absolute", width: 14, height: 14, borderRadius: "50%", border: "2.5px solid #ffffff", cursor: "crosshair", zIndex: 5 },
+  warnFloat: { position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", background: "#fff7ed", border: "1px solid #f59e0b", color: "#b45309", fontSize: 12, padding: "6px 14px", borderRadius: 8, boxShadow: "0 6px 20px rgba(15,23,42,.12)" },
 
-  inspector: { width: 260, padding: 14, borderLeft: "1px solid #16281e", overflowY: "auto", background: "#0c1610", flexShrink: 0 },
+  inspector: { width: 260, padding: 14, borderLeft: "1px solid #e2e8f0", overflowY: "auto", background: "#ffffff", flexShrink: 0 },
 
   /* mobile: palette slides in from the left, inspector rises as a bottom sheet */
-  paletteDrawer: { position: "fixed", top: 0, left: 0, bottom: 0, width: "min(320px, 85vw)", zIndex: 70, borderRight: "1px solid #2a4535", boxShadow: "12px 0 40px rgba(0,0,0,.55)" },
-  drawerBackdrop: { position: "fixed", inset: 0, zIndex: 65, background: "rgba(4,10,7,.6)" },
-  inspectorSheet: { position: "fixed", left: 0, right: 0, bottom: 0, width: "auto", maxHeight: "58vh", zIndex: 60, borderLeft: "none", borderTop: "1px solid #2a4535", borderRadius: "16px 16px 0 0", boxShadow: "0 -12px 40px rgba(0,0,0,.55)" },
-  fab: { position: "fixed", bottom: 16, left: 16, zIndex: 40, padding: "12px 18px", fontSize: 14, fontWeight: 800, borderRadius: 999, border: "none", background: "#25D366", color: "#06130b", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 8px 24px rgba(0,0,0,.5)" },
-  input: { boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #2a4535", background: "#0a120d", color: "#e6f4ec", fontSize: 12.5, outline: "none", fontFamily: "inherit", width: "100%" },
-  textarea: { width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #2a4535", background: "#0a120d", color: "#e6f4ec", fontSize: 12.5, outline: "none", resize: "vertical", fontFamily: "inherit" },
-  miniBtn: { padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #2a4535", background: "#0d1b13", color: "#8fae9d", cursor: "pointer", fontFamily: "inherit" },
-  addBtn: { width: "100%", padding: "7px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px dashed #2fbf71", background: "transparent", color: "#2fbf71", cursor: "pointer", fontFamily: "inherit" },
-  dangerBtn: { width: "100%", marginTop: 8, padding: "8px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px solid #5a2626", background: "#1d0f0f", color: "#FF7A7A", cursor: "pointer", fontFamily: "inherit" },
-  primaryBtn: { padding: "9px 18px", fontSize: 13, fontWeight: 800, borderRadius: 9, border: "none", background: "#25D366", color: "#06130b", cursor: "pointer", fontFamily: "inherit" },
-  ghostBtn: { padding: "8px 14px", fontSize: 12.5, fontWeight: 700, borderRadius: 9, border: "1px solid #2a4535", background: "#0d1b13", color: "#9be8c0", cursor: "pointer", fontFamily: "inherit" },
+  paletteDrawer: { position: "fixed", top: 0, left: 0, bottom: 0, width: "min(320px, 85vw)", zIndex: 70, borderRight: "1px solid #e2e8f0", boxShadow: "12px 0 40px rgba(15,23,42,.2)" },
+  drawerBackdrop: { position: "fixed", inset: 0, zIndex: 65, background: "rgba(15,23,42,.4)" },
+  inspectorSheet: { position: "fixed", left: 0, right: 0, bottom: 0, width: "auto", maxHeight: "58vh", zIndex: 60, borderLeft: "none", borderTop: "1px solid #e2e8f0", borderRadius: "16px 16px 0 0", boxShadow: "0 -12px 40px rgba(15,23,42,.2)" },
+  fab: { position: "fixed", bottom: 16, left: 16, zIndex: 40, padding: "12px 18px", fontSize: 14, fontWeight: 800, borderRadius: 999, border: "none", background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 8px 24px rgba(18,140,126,.4)" },
+  input: { boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 12.5, outline: "none", fontFamily: "inherit", width: "100%" },
+  textarea: { width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 12.5, outline: "none", resize: "vertical", fontFamily: "inherit" },
+  miniBtn: { padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #dbe3ee", background: "#ffffff", color: "#64748b", cursor: "pointer", fontFamily: "inherit" },
+  addBtn: { width: "100%", padding: "7px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px dashed #059669", background: "transparent", color: "#059669", cursor: "pointer", fontFamily: "inherit" },
+  dangerBtn: { width: "100%", marginTop: 8, padding: "8px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px solid #fecdd3", background: "#fff1f2", color: "#e11d48", cursor: "pointer", fontFamily: "inherit" },
+  primaryBtn: { padding: "9px 18px", fontSize: 13, fontWeight: 800, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(18,140,126,.3)" },
+  ghostBtn: { padding: "8px 14px", fontSize: 12.5, fontWeight: 700, borderRadius: 9, border: "1px solid #c8e6d5", background: "#f0fdf4", color: "#0f766e", cursor: "pointer", fontFamily: "inherit" },
 
   codeWrap: { flex: 1, display: "flex", flexDirection: "column", minHeight: 0, padding: 16, gap: 10 },
   codeBar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" },
-  warnBar: { padding: "8px 12px", borderRadius: 8, background: "#3a2a10", border: "1px solid #F5B841", color: "#F5B841", fontSize: 12 },
-  codeBox: { flex: 1, margin: 0, overflow: "auto", background: "#060d09", border: "1px solid #16281e", borderRadius: 12, padding: 16, fontSize: 11.5, lineHeight: 1.55, color: "#9be8c0", fontFamily: mono, whiteSpace: "pre" },
-  inlineCode: { fontFamily: mono, fontSize: 11, background: "#06130b", padding: "1px 6px", borderRadius: 5, color: "#9be8c0" },
+  warnBar: { padding: "8px 12px", borderRadius: 8, background: "#fff7ed", border: "1px solid #f59e0b", color: "#b45309", fontSize: 12 },
+  codeBox: { flex: 1, margin: 0, overflow: "auto", background: "#0f172a", border: "1px solid #1e293b", borderRadius: 12, padding: 16, fontSize: 11.5, lineHeight: 1.55, color: "#86efac", fontFamily: mono, whiteSpace: "pre", boxShadow: "0 10px 30px rgba(15,23,42,.15)" },
+  inlineCode: { fontFamily: mono, fontSize: 11, background: "#e8eef7", padding: "1px 6px", borderRadius: 5, color: "#0f766e" },
 
   activateWrap: { flex: 1, display: "flex", gap: 18, padding: 18, overflow: "auto", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "center" },
-  credCard: { width: 360, maxWidth: "100%", background: "#0c1610", border: "1px solid #16281e", borderRadius: 14, padding: 18 },
-  liveBox: { marginTop: 14, padding: 12, borderRadius: 10, background: "#0d1f14", border: "1px solid #2fbf71" },
+  credCard: { width: 360, maxWidth: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 18, boxShadow: "0 10px 30px rgba(15,23,42,.08)" },
+  liveBox: { marginTop: 14, padding: 12, borderRadius: 10, background: "#ecfdf5", border: "1px solid #34d399" },
 
-  phone: { width: 340, maxWidth: "100%", height: "min(560px, calc(100dvh - 180px))", minHeight: 380, display: "flex", flexDirection: "column", background: "#0c1610", border: "1px solid #16281e", borderRadius: 22, overflow: "hidden", boxShadow: "0 20px 50px rgba(0,0,0,.5)" },
-  phoneHeader: { display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#128C7E22", borderBottom: "1px solid #16281e" },
-  avatar: { width: 32, height: 32, borderRadius: "50%", background: "#128C7E", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 },
-  phoneBody: { flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 7, backgroundImage: "radial-gradient(#14261a 1px, transparent 1px)", backgroundSize: "16px 16px" },
+  phone: { width: 340, maxWidth: "100%", height: "min(560px, calc(100dvh - 180px))", minHeight: 380, display: "flex", flexDirection: "column", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 22, overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.18)" },
+  phoneHeader: { display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "linear-gradient(135deg,#128C7E,#25D366)", color: "#ffffff" },
+  avatar: { width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 },
+  phoneBody: { flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 7, backgroundColor: "#efeae2", backgroundImage: "radial-gradient(#dcd3c3 1px, transparent 1px)", backgroundSize: "16px 16px" },
   bubble: { maxWidth: "80%", padding: "8px 11px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" },
-  bubbleBot: { background: "#14261a", border: "1px solid #1d3328", borderTopLeftRadius: 3 },
-  bubbleMe: { background: "#128C7E", color: "#eafff5", borderTopRightRadius: 3 },
-  phoneInput: { display: "flex", gap: 8, padding: 10, borderTop: "1px solid #16281e" },
+  bubbleBot: { background: "#ffffff", border: "1px solid #e5decf", borderTopLeftRadius: 3 },
+  bubbleMe: { background: "#d9fdd3", color: "#0b3d2c", borderTopRightRadius: 3 },
+  phoneInput: { display: "flex", gap: 8, padding: 10, borderTop: "1px solid #e2e8f0", background: "#f8fafc" },
 };

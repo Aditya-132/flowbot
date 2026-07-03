@@ -43,7 +43,7 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
           <div style={S.logo}>⚡</div>
           <div style={{ flex: 1 }}>
             <h1 style={{ fontWeight: 800, fontSize: 20, margin: 0 }}>FlowBot — WhatsApp Bot Builder</h1>
-            <div style={{ fontSize: 11, color: "#8fae9d" }}>drag & drop flowchart → live WhatsApp bot · no code, no AI</div>
+            <div style={{ fontSize: 11, color: "#64748b" }}>drag & drop flowchart → live WhatsApp bot · no code, no AI</div>
           </div>
           {modal && <button style={S.closeBtn} onClick={onClose} title="Keep building without an account">✕</button>}
         </div>
@@ -53,7 +53,7 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
             Your canvas stays exactly as it is.
           </div>
         )}
-        <p style={{ fontSize: 12, color: "#8fae9d", margin: 0, lineHeight: 1.55 }}>
+        <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.55 }}>
           38+ ready blocks, hotel/restaurant/bank/store templates, a Block Lab to invent your own
           blocks, a live simulator — go live on Meta, Twilio, Green API or Whapi, or export your
           bot's full code as a ZIP.
@@ -96,7 +96,7 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
           </button>
         </form>
 
-        <div style={{ fontSize: 12, color: "#8fae9d", textAlign: "center", marginTop: 4 }}>
+        <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", marginTop: 4 }}>
           {mode === "login" ? (
             <>New here?{" "}
               <button style={S.linkBtn} onClick={() => switchMode("signup")}>Create an account</button>
@@ -113,18 +113,18 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
 }
 
 const S = {
-  page: { height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0a120d", color: "#e6f4ec", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", backgroundImage: "radial-gradient(#1a2f22 1.2px, transparent 1.2px)", backgroundSize: "22px 22px" },
-  pageModal: { position: "fixed", inset: 0, zIndex: 96, height: "auto", background: "rgba(4,10,7,.82)", backgroundImage: "none" },
-  closeBtn: { border: "1px solid #2a4535", background: "#0d1b13", color: "#8fae9d", borderRadius: 8, padding: "4px 9px", cursor: "pointer", fontFamily: "inherit", fontSize: 13 },
-  modalNote: { fontSize: 12, color: "#9be8c0", background: "#0d1f14", border: "1px solid #2fbf71", borderRadius: 10, padding: "9px 12px", lineHeight: 1.5 },
-  card: { width: 360, maxWidth: "92vw", maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, background: "#0c1610", border: "1px solid #16281e", borderRadius: 16, padding: 26, boxShadow: "0 20px 50px rgba(0,0,0,.5)" },
-  logo: { width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#25D366,#128C7E)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 0 18px #25d36644" },
-  tabs: { display: "flex", gap: 6, background: "#0a120d", border: "1px solid #1d3328", borderRadius: 10, padding: 4 },
-  tab: { flex: 1, padding: "8px 0", borderRadius: 7, border: "none", background: "transparent", color: "#8fae9d", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
-  tabActive: { background: "#25D366", color: "#06130b" },
-  label: { display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 700, color: "#9be8c0" },
-  input: { boxSizing: "border-box", padding: "9px 11px", borderRadius: 8, border: "1px solid #2a4535", background: "#0a120d", color: "#e6f4ec", fontSize: 16, outline: "none", fontFamily: "inherit", width: "100%", fontWeight: 400 },
-  error: { padding: "8px 12px", borderRadius: 8, background: "#3a1414", border: "1px solid #FF7A7A", color: "#ffb3b3", fontSize: 12.5, fontWeight: 700 },
-  primaryBtn: { padding: "11px 18px", fontSize: 14, fontWeight: 800, borderRadius: 9, border: "none", background: "#25D366", color: "#06130b", cursor: "pointer", fontFamily: "inherit" },
-  linkBtn: { border: "none", background: "transparent", color: "#25D366", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" },
+  page: { height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#eef2f9", color: "#0f172a", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", backgroundImage: "radial-gradient(#c6d3e8 1.2px, transparent 1.2px)", backgroundSize: "22px 22px" },
+  pageModal: { position: "fixed", inset: 0, zIndex: 96, height: "auto", background: "rgba(15,23,42,.5)", backgroundImage: "none" },
+  closeBtn: { border: "1px solid #dbe3ee", background: "#ffffff", color: "#64748b", borderRadius: 8, padding: "4px 9px", cursor: "pointer", fontFamily: "inherit", fontSize: 13 },
+  modalNote: { fontSize: 12, color: "#047857", background: "#ecfdf5", border: "1px solid #34d399", borderRadius: 10, padding: "9px 12px", lineHeight: 1.5 },
+  card: { width: 360, maxWidth: "92vw", maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 26, boxShadow: "0 20px 50px rgba(15,23,42,.18)" },
+  logo: { width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#25D366,#128C7E)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 4px 14px #25d36655" },
+  tabs: { display: "flex", gap: 6, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 10, padding: 4 },
+  tab: { flex: 1, padding: "8px 0", borderRadius: 7, border: "none", background: "transparent", color: "#64748b", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+  tabActive: { background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", boxShadow: "0 3px 10px rgba(18,140,126,.3)" },
+  label: { display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 700, color: "#0f766e" },
+  input: { boxSizing: "border-box", padding: "9px 11px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 16, outline: "none", fontFamily: "inherit", width: "100%", fontWeight: 400 },
+  error: { padding: "8px 12px", borderRadius: 8, background: "#fef2f2", border: "1px solid #ef4444", color: "#b91c1c", fontSize: 12.5, fontWeight: 700 },
+  primaryBtn: { padding: "11px 18px", fontSize: 14, fontWeight: 800, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(18,140,126,.3)" },
+  linkBtn: { border: "none", background: "transparent", color: "#128C7E", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" },
 };
