@@ -5,7 +5,7 @@ import { api } from "./api.js";
    FlowBot — WhatsApp Bot Builder (full-stack)
    Design a flowchart → backend stores it → deterministic code
    export → activate with provider creds → live webhook + simulator.
-   5 pre-embedded features. NO AI in the bot runtime.
+   35 pre-embedded features. NO AI in the bot runtime.
    ============================================================ */
 
 const NODE_W = 220;
@@ -40,20 +40,218 @@ const NODE_TYPES = {
     label: "Goodbye / Handoff", icon: "🤝", color: "#FF7A7A",
     desc: "Ends the conversation. Supports {variables} like {name}.",
     defaults: () => ({ message: "Thanks {name}! Our team will reach out shortly. 🙌" }),
+    outputs: () => 0,
+  },
+  text: {
+    label: "Text Message", icon: "✉️", color: "#60A5FA",
+    desc: "Sends a plain message and continues.",
+    defaults: () => ({ message: "Here is the information you asked for." }),
+  },
+  quick_reply: {
+    label: "Quick Replies", icon: "⚡", color: "#FACC15",
+    desc: "Small choice list; each choice gets a branch.",
+    defaults: () => ({ prompt: "Pick one:", options: ["Yes", "No"] }),
+    outputs: (c) => c.options.length,
+  },
+  link: {
+    label: "Send Link", icon: "🔗", color: "#38BDF8",
+    desc: "Shares a URL with a short message.",
+    defaults: () => ({ message: "Open this link:", url: "https://example.com" }),
+  },
+  image: {
+    label: "Image / Media Link", icon: "🖼️", color: "#A78BFA",
+    desc: "Sends an image or media URL as a WhatsApp-safe text link.",
+    defaults: () => ({ caption: "Here is the image:", url: "https://example.com/image.jpg" }),
+  },
+  coupon: {
+    label: "Coupon Code", icon: "🏷️", color: "#FB7185",
+    desc: "Shares an offer or discount code.",
+    defaults: () => ({ message: "Limited-time offer:", code: "SAVE10" }),
+  },
+  product_card: {
+    label: "Product Card", icon: "🛍️", color: "#34D399",
+    desc: "Shows one product with price, details, and link.",
+    defaults: () => ({ name: "Classic Sneakers", price: "₹1,999", description: "Comfortable daily wear sneakers.", link: "https://example.com/products/sneakers" }),
+  },
+  catalog: {
+    label: "Mini Catalog", icon: "📦", color: "#22C55E",
+    desc: "Lists products or services inside chat.",
+    defaults: () => ({
+      title: "Popular products",
+      items: [
+        { name: "Classic Sneakers", price: "₹1,999" },
+        { name: "Travel Backpack", price: "₹1,499" },
+      ],
+    }),
+  },
+  product_search: {
+    label: "Product Search", icon: "🔎", color: "#06B6D4",
+    desc: "Asks a keyword, then replies with a matching product.",
+    defaults: () => ({
+      question: "What product are you looking for?",
+      notFound: "I could not find that product. Try another keyword.",
+      items: [
+        { name: "Sneakers", keywords: "shoes footwear", price: "₹1,999", description: "Comfortable daily wear sneakers.", link: "https://example.com/sneakers" },
+        { name: "Backpack", keywords: "bag travel school", price: "₹1,499", description: "Lightweight everyday backpack.", link: "https://example.com/backpack" },
+      ],
+    }),
+    outputs: () => 2,
+  },
+  order_status: {
+    label: "Order Status", icon: "🧾", color: "#F97316",
+    desc: "Collects an order ID and stores it as {orderId}.",
+    defaults: () => ({ question: "Please share your order ID:", ack: "Thanks. Checking order {orderId}. Our team will update you shortly." }),
+  },
+  tracking_link: {
+    label: "Tracking Link", icon: "🚚", color: "#84CC16",
+    desc: "Collects tracking ID and returns a tracking URL.",
+    defaults: () => ({ question: "Please enter your tracking ID:", baseUrl: "https://example.com/track/", ack: "Tracking link: {baseUrl}{trackingId}" }),
+  },
+  appointment: {
+    label: "Appointment Booking", icon: "📅", color: "#C084FC",
+    desc: "Collects preferred date/time.",
+    defaults: () => ({ question: "What date and time works for you?", ack: "Appointment request saved for {appointmentTime}." }),
+  },
+  booking_confirm: {
+    label: "Booking Confirm", icon: "✅", color: "#2DD4BF",
+    desc: "Confirms booking using collected variables.",
+    defaults: () => ({ message: "Confirmed. We have your request for {appointmentTime}." }),
+  },
+  lead_qualify: {
+    label: "Lead Qualification", icon: "🎯", color: "#F59E0B",
+    desc: "Branches by lead intent, budget, or need.",
+    defaults: () => ({ prompt: "What best describes you?", options: ["Ready to buy", "Just comparing", "Need a demo"] }),
+    outputs: (c) => c.options.length,
+  },
+  collect_email: {
+    label: "Collect Email", icon: "📧", color: "#818CF8",
+    desc: "Asks and saves {email}.",
+    defaults: () => ({ question: "Please share your email:", ack: "Thanks, I saved your email." }),
+  },
+  collect_phone: {
+    label: "Collect Phone", icon: "📞", color: "#14B8A6",
+    desc: "Asks and saves {phone}.",
+    defaults: () => ({ question: "Please share your phone number:", ack: "Thanks, I saved your phone number." }),
+  },
+  collect_address: {
+    label: "Collect Address", icon: "📍", color: "#F43F5E",
+    desc: "Asks and saves {address}.",
+    defaults: () => ({ question: "Please share your delivery address:", ack: "Thanks, I saved your address." }),
+  },
+  csat: {
+    label: "CSAT Rating", icon: "⭐", color: "#FBBF24",
+    desc: "Collects a 1-5 satisfaction score; each rating can branch.",
+    defaults: () => ({ question: "Rate your experience from 1 to 5.", field: "rating", thanks: "Thanks for rating us {rating}/5." }),
+    outputs: () => 5,
+  },
+  feedback: {
+    label: "Feedback", icon: "🗣️", color: "#93C5FD",
+    desc: "Collects free-text feedback as {feedback}.",
+    defaults: () => ({ question: "What should we improve?", ack: "Thanks for the feedback." }),
+  },
+  language: {
+    label: "Language Router", icon: "🌐", color: "#67E8F9",
+    desc: "Lets customers choose language and branches.",
+    defaults: () => ({ prompt: "Choose language:", options: ["English", "हिन्दी", "मराठी"] }),
+    outputs: (c) => c.options.length,
+  },
+  business_hours: {
+    label: "Business Hours", icon: "🕒", color: "#A3E635",
+    desc: "Branches based on server time.",
+    defaults: () => ({ startHour: 9, endHour: 18, openMessage: "We are open right now.", closedMessage: "We are closed right now. Leave a message and we will reply soon." }),
+    outputs: () => 2,
+  },
+  human_handoff: {
+    label: "Human Handoff", icon: "🙋", color: "#F87171",
+    desc: "Marks handoff and tells the user a person will take over.",
+    defaults: () => ({ message: "I am connecting you to a human teammate. Please wait." }),
+  },
+  tag_customer: {
+    label: "Tag Customer", icon: "🏷️", color: "#FB923C",
+    desc: "Adds a lightweight tag to session variables.",
+    defaults: () => ({ tag: "hot_lead", message: "Tagged as hot_lead." }),
+  },
+  set_variable: {
+    label: "Set Variable", icon: "🧩", color: "#4ADE80",
+    desc: "Stores a fixed value, like {plan} or {source}.",
+    defaults: () => ({ field: "plan", value: "starter", message: "Saved {plan} plan." }),
+  },
+  condition: {
+    label: "Condition", icon: "🔀", color: "#F472B6",
+    desc: "Branches if a variable equals or contains a value.",
+    defaults: () => ({ field: "plan", operator: "equals", value: "starter", trueMessage: "Matched.", falseMessage: "Did not match." }),
+    outputs: () => 2,
+  },
+  save_note: {
+    label: "Save Note", icon: "🗒️", color: "#CBD5E1",
+    desc: "Creates an internal note in session variables.",
+    defaults: () => ({ field: "note", note: "Customer asked about pricing.", message: "Note saved." }),
+  },
+  payment_link: {
+    label: "Payment Link", icon: "💳", color: "#10B981",
+    desc: "Shares checkout or payment URL.",
+    defaults: () => ({ message: "You can pay here:", url: "https://example.com/pay" }),
+  },
+  return_policy: {
+    label: "Return Policy", icon: "↩️", color: "#FCA5A5",
+    desc: "Answers returns/exchange questions.",
+    defaults: () => ({ message: "Returns are accepted within 7 days for unused items with original packaging." }),
+  },
+  shipping_info: {
+    label: "Shipping Info", icon: "📮", color: "#86EFAC",
+    desc: "Answers delivery fee and timeline questions.",
+    defaults: () => ({ message: "Standard delivery takes 2-4 business days. Shipping is free above ₹999." }),
+  },
+  abandoned_cart: {
+    label: "Cart Recovery", icon: "🛒", color: "#FDBA74",
+    desc: "Nudges a shopper back to checkout.",
+    defaults: () => ({ message: "Looks like you left something in your cart. Want help completing the order?" }),
+  },
+  review_request: {
+    label: "Review Request", icon: "💚", color: "#6EE7B7",
+    desc: "Asks happy customers for a review.",
+    defaults: () => ({ message: "If you liked the experience, please leave us a quick review: https://example.com/review" }),
   },
 };
 
+const menuLikeTypes = new Set(["menu", "quick_reply", "language", "lead_qualify"]);
+const branchLabels = {
+  condition: ["true", "false"],
+  business_hours: ["open", "closed"],
+  product_search: ["found", "not found"],
+  csat: ["1", "2", "3", "4", "5"],
+};
+
 /* ---------- geometry ---------- */
-const nodeH = (n) => (n.type === "menu" ? 66 + n.config.options.length * 26 + 12 : 90);
+const listRows = (n) => {
+  if (menuLikeTypes.has(n.type)) return n.config.options?.length || 0;
+  if (n.type === "faq") return n.config.pairs?.length || 0;
+  if (n.type === "catalog" || n.type === "product_search") return n.config.items?.length || 0;
+  if (n.type === "csat") return 5;
+  return 0;
+};
+const nodeH = (n) => Math.max(90, 66 + listRows(n) * 26 + 12);
 const outPortPos = (n, i) =>
-  n.type === "menu" ? { x: n.x + NODE_W, y: n.y + 66 + i * 26 + 13 } : { x: n.x + NODE_W, y: n.y + 60 };
+  outputCount(n) > 1 ? { x: n.x + NODE_W, y: n.y + 66 + i * 26 + 13 } : { x: n.x + NODE_W, y: n.y + 60 };
 const inPortPos = (n) => ({ x: n.x, y: n.y + 18 });
-const outputCount = (n) => (n.type === "goodbye" ? 0 : n.type === "menu" ? n.config.options.length : 1);
+const outputCount = (n) => NODE_TYPES[n.type]?.outputs?.(n.config) ?? 1;
 const bez = (a, b) => {
   const dx = Math.max(40, Math.abs(b.x - a.x) * 0.5);
   return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
+const nodeSummary = (n) => {
+  const c = n.config || {};
+  if (menuLikeTypes.has(n.type)) return `${c.prompt || "Choose"} · ${(c.options || []).join(", ")}`;
+  if (n.type === "faq") return `${(c.pairs || []).length} keyword repl${(c.pairs || []).length === 1 ? "y" : "ies"}: ${(c.pairs || []).map((p) => p.k).join(", ")}`;
+  if (n.type === "collect") return `${c.question} · saves {${c.field}}`;
+  if (n.type === "product_card") return `${c.name} · ${c.price}`;
+  if (n.type === "catalog") return `${c.title} · ${(c.items || []).length} items`;
+  if (n.type === "product_search") return `${c.question} · ${(c.items || []).length} searchable items`;
+  if (n.type === "business_hours") return `${c.startHour}:00-${c.endHour}:00`;
+  if (n.type === "condition") return `{${c.field}} ${c.operator || "equals"} ${c.value}`;
+  return c.message || c.question || c.caption || c.url || c.note || NODE_TYPES[n.type]?.desc || "";
+};
 
 export default function App() {
   const [tab, setTab] = useState(0);
@@ -323,7 +521,7 @@ export default function App() {
           <div style={S.palette}>
             <div style={S.paneTitle}>Feature blocks</div>
             <div style={{ fontSize: 11, color: "#7d9c8c", marginBottom: 10 }}>
-              5 features, each backed by its own pre-written code template on the server.
+              35 deterministic WhatsApp blocks backed by pre-written server handlers.
             </div>
             {Object.entries(NODE_TYPES).map(([k, t]) => (
               <button key={k} onClick={() => addNode(k)} style={S.paletteItem}>
@@ -373,15 +571,20 @@ export default function App() {
                     {n.type === "welcome" && <span style={S.entryBadge}>ENTRY</span>}
                   </div>
                   <div style={S.nodeBody}>
-                    {(n.type === "welcome" || n.type === "goodbye") && <Trunc text={n.config.message} />}
-                    {n.type === "collect" && (<><Trunc text={n.config.question} /><span style={S.chip}>saves → {"{" + n.config.field + "}"}</span></>)}
-                    {n.type === "faq" && <Trunc text={n.config.pairs.length + " keyword repl" + (n.config.pairs.length === 1 ? "y" : "ies") + ": " + n.config.pairs.map((p) => p.k).join(", ")} />}
-                    {n.type === "menu" && (<>
-                      <Trunc text={n.config.prompt} />
-                      {n.config.options.map((o, i) => (
-                        <div key={i} style={S.menuRow}>{i + 1}. {o.length > 20 ? o.slice(0, 20) + "…" : o}</div>
-                      ))}
-                    </>)}
+                    <Trunc text={nodeSummary(n)} />
+                    {menuLikeTypes.has(n.type) && (n.config.options || []).map((o, i) => (
+                      <div key={i} style={S.menuRow}>{i + 1}. {o.length > 20 ? o.slice(0, 20) + "…" : o}</div>
+                    ))}
+                    {n.type === "csat" && [1, 2, 3, 4, 5].map((o, i) => (
+                      <div key={i} style={S.menuRow}>{o}. rating branch</div>
+                    ))}
+                    {branchLabels[n.type] && !menuLikeTypes.has(n.type) && n.type !== "csat" && branchLabels[n.type].map((o, i) => (
+                      <div key={i} style={S.menuRow}>{i + 1}. {o}</div>
+                    ))}
+                    {n.type === "collect" && <span style={S.chip}>saves → {"{" + n.config.field + "}"}</span>}
+                    {n.type === "catalog" && (n.config.items || []).map((o, i) => (
+                      <div key={i} style={S.menuRow}>{i + 1}. {(o.name || "Item").length > 20 ? o.name.slice(0, 20) + "…" : o.name}</div>
+                    ))}
                   </div>
                   {n.type !== "welcome" && (
                     <div style={{ ...S.port, left: -7, top: 11, background: connecting ? "#9be8c0" : "#5c8a72" }}
@@ -469,6 +672,10 @@ export default function App() {
                     ))}
                     <button style={S.addBtn} onClick={() => updateConfig(selNode.id, { pairs: [...selNode.config.pairs, { k: "keyword", a: "Answer text" }] })}>+ Add pair</button>
                   </Field>
+                )}
+
+                {!["welcome", "goodbye", "collect", "menu", "faq"].includes(selNode.type) && (
+                  <GenericConfig node={selNode} updateConfig={updateConfig} />
                 )}
 
                 <button style={S.dangerBtn} onClick={() => deleteNode(selNode.id)}>🗑 Delete block</button>
@@ -703,6 +910,60 @@ function Field({ label, children }) {
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: "#8fae9d", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5 }}>{label}</div>
       {children}
+    </div>
+  );
+}
+function GenericConfig({ node, updateConfig }) {
+  const patch = (key, value) => updateConfig(node.id, { [key]: value });
+  return (
+    <>
+      {Object.entries(node.config || {}).map(([key, value]) => (
+        <Field key={key} label={key.replace(/([A-Z])/g, " $1")}>
+          {Array.isArray(value) ? (
+            <ArrayEditor value={value} onChange={(next) => patch(key, next)} />
+          ) : typeof value === "number" ? (
+            <input style={styles.input} type="number" value={value} onChange={(e) => patch(key, Number(e.target.value))} />
+          ) : longField(key, value) ? (
+            <textarea style={styles.textarea} rows={3} value={value}
+              onChange={(e) => patch(key, e.target.value)} />
+          ) : (
+            <input style={styles.input} value={value}
+              onChange={(e) => patch(key, e.target.value)} />
+          )}
+        </Field>
+      ))}
+    </>
+  );
+}
+function longField(key, value) {
+  return /message|question|description|caption|note|policy|ack|notFound|thanks/i.test(key) || String(value || "").length > 54;
+}
+function ArrayEditor({ value, onChange }) {
+  const isObjectList = value.some((item) => item && typeof item === "object" && !Array.isArray(item));
+  const updateItem = (idx, next) => onChange(value.map((item, i) => (i === idx ? next : item)));
+  const removeItem = (idx) => onChange(value.filter((_, i) => i !== idx));
+  const addItem = () => {
+    if (isObjectList) {
+      const template = value[0] || { name: "New item", price: "" };
+      onChange([...value, Object.fromEntries(Object.keys(template).map((k) => [k, k === "name" ? "New item" : ""]))]);
+    } else {
+      onChange([...value, "New option"]);
+    }
+  };
+  return (
+    <div>
+      {value.map((item, idx) => (
+        <div key={idx} style={{ marginBottom: 8, padding: 8, background: "#0d1b13", borderRadius: 8, border: "1px solid #1d3328" }}>
+          {isObjectList ? Object.entries(item).map(([k, v]) => (
+            <input key={k} style={{ ...styles.input, marginBottom: 6 }} placeholder={k} value={v}
+              onChange={(e) => updateItem(idx, { ...item, [k]: e.target.value })} />
+          )) : (
+            <input style={styles.input} value={item} onChange={(e) => updateItem(idx, e.target.value)} />
+          )}
+          {value.length > 1 && <button style={{ ...styles.miniBtn, marginTop: 4 }} onClick={() => removeItem(idx)}>✕ remove</button>}
+        </div>
+      ))}
+      <button style={styles.addBtn} onClick={addItem}>+ Add</button>
     </div>
   );
 }

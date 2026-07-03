@@ -14,15 +14,21 @@ Design a flowchart in the browser, and FlowBot turns it into a working WhatsApp 
                                  └──────────────┘
 ```
 
-## The 5 pre-embedded features
+## The 35 pre-embedded features
 
-| Block | What it does |
+FlowBot now includes the original conversation blocks plus 30 more practical
+WhatsApp automation blocks inspired by common ecommerce/support workflows:
+
+| Family | Blocks |
 |---|---|
-| 👋 Welcome Message | Entry point — greets on the first message |
-| 🔢 Menu Options | Numbered menu; each option branches to another block |
-| 💬 FAQ Auto-Reply | Keyword → answer table (type `0` to continue the flow) |
-| 📝 Collect Info | Asks a question, saves the reply as `{variable}` |
-| 🤝 Goodbye / Handoff | Ends the chat; supports `{variables}` like `{name}` |
+| Core conversation | Welcome, Text, Menu, Quick Replies, FAQ, Goodbye |
+| Lead capture | Collect Info, Email, Phone, Address, Lead Qualification |
+| Ecommerce | Product Card, Mini Catalog, Product Search, Coupon, Payment Link, Cart Recovery |
+| Orders | Order Status, Tracking Link, Shipping Info, Return Policy |
+| Booking/support | Appointment, Booking Confirm, Business Hours, Human Handoff |
+| Feedback | CSAT Rating, Feedback, Review Request |
+| Routing/logic | Language Router, Condition, Set Variable, Tag Customer, Save Note |
+| Media/utilities | Send Link, Image / Media Link |
 
 Each block maps to a fixed handler in `backend/engine.js`. Generating a bot is just:
 **your flowchart serialized as JSON + those handlers = server.js**. String assembly, zero AI.
@@ -158,7 +164,7 @@ anywhere — it embeds your whole flow and needs only Express.
 flowbot/
 ├── backend/
 │   ├── server.js    # REST API + live provider webhooks
-│   ├── engine.js    # deterministic flow interpreter (the 5 feature handlers)
+│   ├── engine.js    # deterministic flow interpreter (the 35 feature handlers)
 │   ├── meta.js      # Meta Cloud API adapter (webhook parsing + Graph API sends)
 │   ├── green.js     # Green API adapter (webhook parsing + REST sends)
 │   ├── whapi.js     # Whapi.cloud adapter (webhook parsing + REST sends)

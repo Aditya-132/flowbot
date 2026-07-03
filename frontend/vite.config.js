@@ -9,6 +9,9 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:3001",
       "/whatsapp": "http://localhost:3001",
+      "/meta": "http://localhost:3001",
+      "/green": "http://localhost:3001",
+      "/whapi": "http://localhost:3001",
     },
   },
 });
