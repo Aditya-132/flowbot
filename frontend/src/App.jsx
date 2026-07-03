@@ -20,6 +20,7 @@ const NODE_TYPES = {
     label: "Menu Options", icon: "🔢", color: "#F5B841",
     desc: "Numbered menu. Each option branches to another block.",
     defaults: () => ({ prompt: "How can I help you today?", options: ["Browse products", "Order status", "Talk to a human"] }),
+    outputs: (c) => (c.options || []).length,
   },
   faq: {
     label: "FAQ Auto-Reply", icon: "💬", color: "#4EA8DE",
@@ -51,7 +52,7 @@ const NODE_TYPES = {
     label: "Quick Replies", icon: "⚡", color: "#FACC15",
     desc: "Small choice list; each choice gets a branch.",
     defaults: () => ({ prompt: "Pick one:", options: ["Yes", "No"] }),
-    outputs: (c) => c.options.length,
+    outputs: (c) => (c.options || []).length,
   },
   link: {
     label: "Send Link", icon: "🔗", color: "#38BDF8",
@@ -121,7 +122,7 @@ const NODE_TYPES = {
     label: "Lead Qualification", icon: "🎯", color: "#F59E0B",
     desc: "Branches by lead intent, budget, or need.",
     defaults: () => ({ prompt: "What best describes you?", options: ["Ready to buy", "Just comparing", "Need a demo"] }),
-    outputs: (c) => c.options.length,
+    outputs: (c) => (c.options || []).length,
   },
   collect_email: {
     label: "Collect Email", icon: "📧", color: "#818CF8",
@@ -153,7 +154,7 @@ const NODE_TYPES = {
     label: "Language Router", icon: "🌐", color: "#67E8F9",
     desc: "Lets customers choose language and branches.",
     defaults: () => ({ prompt: "Choose language:", options: ["English", "हिन्दी", "मराठी"] }),
-    outputs: (c) => c.options.length,
+    outputs: (c) => (c.options || []).length,
   },
   business_hours: {
     label: "Business Hours", icon: "🕒", color: "#A3E635",
@@ -234,7 +235,17 @@ const nodeH = (n) => Math.max(90, 66 + listRows(n) * 26 + 12);
 const outPortPos = (n, i) =>
   outputCount(n) > 1 ? { x: n.x + NODE_W, y: n.y + 66 + i * 26 + 13 } : { x: n.x + NODE_W, y: n.y + 60 };
 const inPortPos = (n) => ({ x: n.x, y: n.y + 18 });
-const outputCount = (n) => NODE_TYPES[n.type]?.outputs?.(n.config) ?? 1;
+const outputCount = (n) => {
+  const fn = NODE_TYPES[n.type]?.outputs;
+  if (!fn) return 1;
+  const k = fn(n.config || {});
+  return Number.isFinite(k) && k > 0 ? k : 1;
+};
+const portLabel = (n, i) => {
+  if (menuLikeTypes.has(n.type)) return (n.config.options || [])[i] || `option ${i + 1}`;
+  if (branchLabels[n.type]) return branchLabels[n.type][i] || "";
+  return "";
+};
 const bez = (a, b) => {
   const dx = Math.max(40, Math.abs(b.x - a.x) * 0.5);
   return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
@@ -264,6 +275,7 @@ export default function App() {
   const [sel, setSel] = useState(null);
   const [drag, setDrag] = useState(null);
   const [connecting, setConnecting] = useState(null);
+  const [hoveredEdge, setHoveredEdge] = useState(null);
   const [provider, setProvider] = useState("meta");
   const [creds, setCreds] = useState({ sid: "", token: "", number: "" });
   const [metaCreds, setMetaCreds] = useState({ accessToken: "", phoneNumberId: "" });
@@ -292,34 +304,42 @@ export default function App() {
     p === "meta" ? `/meta/webhook/${id}` : p === "green" ? `/green/webhook/${id}` : p === "whapi" ? `/whapi/webhook/${id}` : `/whatsapp/${id}`;
 
   /* ---------- persistence ---------- */
+  // Returns the bot id on success, null on failure (avoids stale-state reads
+  // right after the first save creates the id).
   async function saveFlow() {
     setBusy(true);
     try {
-      if (botId) {
-        await api.updateFlow(botId, { name: botName, nodes, edges });
+      let id = botId;
+      if (id) {
+        await api.updateFlow(id, { name: botName, nodes, edges });
       } else {
         const created = await api.createFlow({ name: botName, nodes, edges });
-        setBotId(created.id);
+        id = created.id;
+        setBotId(id);
       }
       setDirty(false);
       refreshList();
       flash("💾 Flow saved");
-      return true;
+      return id;
     } catch (e) {
       flash("Save failed: " + e.message, true);
-      return false;
+      return null;
     } finally { setBusy(false); }
   }
 
   async function ensureSaved() {
-    if (!dirty && botId) return true;
+    if (!dirty && botId) return botId;
     return saveFlow();
   }
 
   async function loadFlow(id) {
     try {
       const f = await api.getFlow(id);
-      setBotId(f.id); setBotName(f.name); setNodes(f.nodes); setEdges(f.edges);
+      // drop blocks of unknown type and wires pointing at missing blocks
+      const loadedNodes = (f.nodes || []).filter((n) => NODE_TYPES[n.type]);
+      const ids = new Set(loadedNodes.map((n) => n.id));
+      const loadedEdges = (f.edges || []).filter((e) => ids.has(e.from) && ids.has(e.to));
+      setBotId(f.id); setBotName(f.name); setNodes(loadedNodes); setEdges(loadedEdges);
       setActivated(!!f.active);
       setProvider(f.provider || "meta");
       setCreds({ sid: f.twilio?.sid || "", token: "", number: f.twilio?.number || "" });
@@ -350,16 +370,15 @@ export default function App() {
   /* ---------- tab switching (auto-saves before code/activate) ---------- */
   async function goTab(i) {
     if (i > 0) {
-      const ok = await ensureSaved();
-      if (!ok) return;
+      const id = await ensureSaved();
+      if (!id) return;
       if (i === 1) {
-        try { setCode(await api.getCode(botIdRefSafe())); } catch { setCode("// save the flow first"); }
+        try { setCode(await api.getCode(id)); } catch { setCode("// could not load code — is the backend running?"); }
       }
+      if (i === 2 && chat.length === 0) resetChat(id);
     }
     setTab(i);
   }
-  // botId state may not be flushed yet right after create; read latest via list
-  function botIdRefSafe() { return botId || (savedFlows[0] && savedFlows[0].id); }
 
   useEffect(() => {
     if (tab === 1 && botId) api.getCode(botId).then(setCode).catch(() => {});
@@ -370,49 +389,114 @@ export default function App() {
     const r = canvasRef.current.getBoundingClientRect();
     return { x: e.clientX - r.left + canvasRef.current.scrollLeft, y: e.clientY - r.top + canvasRef.current.scrollTop };
   };
-  const onCanvasMove = (e) => {
-    if (drag) {
-      const p = canvasXY(e);
-      setNodes((ns) => ns.map((n) => (n.id === drag.id ? { ...n, x: Math.max(0, p.x - drag.dx), y: Math.max(0, p.y - drag.dy) } : n)));
-      markDirty();
-    } else if (connecting) {
-      const p = canvasXY(e);
-      setConnecting((c) => ({ ...c, x: p.x, y: p.y }));
-    }
-  };
+  const suppressCanvasClick = useRef(false);
+
   const startDrag = (e, n) => {
     e.stopPropagation();
+    e.preventDefault();
     const p = canvasXY(e);
     setDrag({ id: n.id, dx: p.x - n.x, dy: p.y - n.y });
     setSel(n.id);
   };
   const startConnect = (e, n, port) => {
     e.stopPropagation();
+    e.preventDefault();
     const p = outPortPos(n, port);
-    setConnecting({ from: n.id, port, x: p.x, y: p.y });
+    setConnecting({ from: n.id, port, x: p.x, y: p.y, sx: e.clientX, sy: e.clientY, moved: false });
   };
-  const finishConnect = (e, target) => {
-    e.stopPropagation();
-    if (!connecting || connecting.from === target.id) return setConnecting(null);
-    setEdges((es) => [
-      ...es.filter((x) => !(x.from === connecting.from && x.fromPort === connecting.port)),
-      { id: uid(), from: connecting.from, fromPort: connecting.port, to: target.id },
-    ]);
-    setConnecting(null);
-    markDirty();
+  const connectTo = (targetId) => {
+    setConnecting((conn) => {
+      if (!conn) return null;
+      const target = nodes.find((n) => n.id === targetId);
+      if (!target || conn.from === targetId) return null;
+      if (target.type === "welcome") {
+        flash("Welcome is the entry point — it can't receive a connection.", true);
+        return null;
+      }
+      setEdges((es) => [
+        ...es.filter((x) => !(x.from === conn.from && x.fromPort === conn.port)),
+        { id: uid(), from: conn.from, fromPort: conn.port, to: targetId },
+      ]);
+      markDirty();
+      return null;
+    });
   };
+
+  // Window-level drag/connect handling: never loses the pointer, supports both
+  // drag-to-connect (release on target) and click-then-click wiring.
+  useEffect(() => {
+    if (!drag && !connecting) return;
+    const onMove = (e) => {
+      const p = canvasXY(e);
+      if (drag) {
+        setNodes((ns) => ns.map((n) => (n.id === drag.id ? { ...n, x: Math.max(0, p.x - drag.dx), y: Math.max(0, p.y - drag.dy) } : n)));
+        markDirty();
+      } else {
+        setConnecting((c) => c && { ...c, x: p.x, y: p.y, moved: c.moved || Math.hypot(e.clientX - c.sx, e.clientY - c.sy) > 6 });
+      }
+    };
+    const onUp = (e) => {
+      if (drag) { setDrag(null); return; }
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const nodeEl = el && el.closest ? el.closest("[data-node-id]") : null;
+      if (nodeEl && nodeEl.getAttribute("data-node-id") !== connecting.from) {
+        connectTo(nodeEl.getAttribute("data-node-id"));
+        suppressCanvasClick.current = true;
+      } else if (connecting.moved) {
+        // dragged out into empty space → cancel
+        setConnecting(null);
+        suppressCanvasClick.current = true;
+      }
+      // plain click on the output dot → stay in click-then-click mode
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+  }, [drag, connecting, nodes]);
+
+  // Keyboard: Esc cancels wiring/selection, Delete removes the selected block.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") { setConnecting(null); setSel(null); return; }
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.key === "Delete" || e.key === "Backspace") && sel && tab === 0) deleteNode(sel);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sel, tab]);
+
   const addNode = (type) => {
-    const n = { id: uid(), type, x: 80 + Math.random() * 120, y: 60 + Math.random() * 160, config: NODE_TYPES[type].defaults() };
+    if (type === "welcome" && hasWelcome) {
+      flash("Your flow already has a Welcome block — there can be only one entry point.", true);
+      return;
+    }
+    const view = canvasRef.current;
+    const baseX = (view?.scrollLeft || 0) + 120;
+    const baseY = (view?.scrollTop || 0) + 80;
+    const n = { id: uid(), type, x: baseX + Math.random() * 120, y: baseY + Math.random() * 140, config: NODE_TYPES[type].defaults() };
     setNodes((ns) => [...ns, n]); setSel(n.id); markDirty();
   };
   const deleteNode = (id) => {
     setNodes((ns) => ns.filter((n) => n.id !== id));
     setEdges((es) => es.filter((e) => e.from !== id && e.to !== id));
-    setSel(null); markDirty();
+    setSel(null); setConnecting(null); markDirty();
   };
   const updateConfig = (id, patch) => {
     setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, config: { ...n.config, ...patch } } : n)));
     markDirty();
+  };
+  // Removing option i: drop its edge and shift edges on higher ports down one,
+  // so remaining branches keep pointing at the right blocks.
+  const removeOption = (node, i) => {
+    const options = (node.config.options || []).filter((_, j) => j !== i);
+    if (!options.length) return;
+    updateConfig(node.id, { options });
+    setEdges((es) =>
+      es
+        .filter((e2) => !(e2.from === node.id && e2.fromPort === i))
+        .map((e2) => (e2.from === node.id && e2.fromPort > i ? { ...e2, fromPort: e2.fromPort - 1 } : e2))
+    );
   };
 
   /* ---------- activation + simulator (both via backend) ---------- */
@@ -439,10 +523,11 @@ export default function App() {
     finally { setBusy(false); }
   }
 
-  async function resetChat() {
-    if (!botId) return;
-    await api.simulate(botId, { from: "simulator", reset: true }).catch(() => {});
-    setChat([{ side: "bot", text: "Simulator ready — messages run through the backend's live engine." }]);
+  async function resetChat(idOverride) {
+    const id = idOverride || botId;
+    if (!id) return;
+    await api.simulate(id, { from: "simulator", reset: true }).catch(() => {});
+    setChat([{ side: "bot", text: "Simulator ready — say hi! Messages run through the backend's live engine." }]);
   }
 
   async function sendChat() {
@@ -453,7 +538,9 @@ export default function App() {
     try {
       const { replies } = await api.simulate(botId, { from: "simulator", message: text });
       setChat((c) => [...c, ...replies.map((t) => ({ side: "bot", text: t }))]);
-    } catch (e) { flash(e.message, true); }
+    } catch (e) {
+      setChat((c) => [...c, { side: "bot", text: "⚠️ " + (e.message || "The backend did not respond.") }]);
+    }
   }
 
   const copyCode = () => {
@@ -533,40 +620,71 @@ export default function App() {
               </button>
             ))}
             <div style={S.tipBox}>
-              💡 Drag to arrange · click a <b>right dot</b> then a block's <b>left dot</b> to wire · click a wire to delete.
+              💡 Drag blocks by their header · to wire, <b>drag from a right dot onto any block</b> (or click the dot, then click the target) · click a wire to delete it · <b>Esc</b> cancels · <b>Delete</b> removes the selected block.
             </div>
           </div>
 
-          <div ref={canvasRef} style={S.canvas} onPointerMove={onCanvasMove}
-            onPointerUp={() => setDrag(null)} onClick={() => { setSel(null); setConnecting(null); }}>
-            <svg style={S.svg} width="2400" height="1600">
+          <div ref={canvasRef} style={{ ...S.canvas, cursor: connecting ? "crosshair" : "default" }}
+            onClick={() => {
+              if (suppressCanvasClick.current) { suppressCanvasClick.current = false; return; }
+              setSel(null); setConnecting(null);
+            }}>
+            <svg style={S.svg}
+              width={Math.max(2400, ...nodes.map((n) => n.x + NODE_W + 400))}
+              height={Math.max(1600, ...nodes.map((n) => n.y + nodeH(n) + 400))}>
               {edges.map((e) => {
                 const a = nodes.find((n) => n.id === e.from);
                 const b = nodes.find((n) => n.id === e.to);
-                if (!a || !b) return null;
+                if (!a || !b || e.fromPort >= outputCount(a)) return null;
+                const pa = outPortPos(a, e.fromPort);
+                const d = bez(pa, inPortPos(b));
+                const hot = hoveredEdge === e.id;
+                const label = outputCount(a) > 1 ? portLabel(a, e.fromPort) : "";
                 return (
-                  <path key={e.id} d={bez(outPortPos(a, e.fromPort), inPortPos(b))}
-                    stroke="#2fbf71" strokeWidth="2.5" strokeDasharray="7 5" fill="none"
-                    style={{ cursor: "pointer", pointerEvents: "stroke" }}
-                    onClick={(ev) => { ev.stopPropagation(); setEdges((es) => es.filter((x) => x.id !== e.id)); markDirty(); }}>
-                    <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1s" repeatCount="indefinite" />
-                  </path>
+                  <g key={e.id}>
+                    <path d={d} stroke={hot ? "#FF7A7A" : "#2fbf71"} strokeWidth={hot ? 3 : 2.5}
+                      strokeDasharray="7 5" fill="none" style={{ pointerEvents: "none" }}>
+                      <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1s" repeatCount="indefinite" />
+                    </path>
+                    {label && (
+                      <text x={pa.x + 12} y={pa.y - 7} fill={hot ? "#FF7A7A" : "#7d9c8c"} fontSize="10" style={{ pointerEvents: "none", userSelect: "none" }}>
+                        {label.length > 18 ? label.slice(0, 18) + "…" : label}
+                      </text>
+                    )}
+                    {/* wide invisible hit area so wires are easy to hover + click-delete */}
+                    <path d={d} stroke="transparent" strokeWidth="14" fill="none"
+                      style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                      onMouseEnter={() => setHoveredEdge(e.id)} onMouseLeave={() => setHoveredEdge(null)}
+                      onClick={(ev) => { ev.stopPropagation(); setEdges((es) => es.filter((x) => x.id !== e.id)); setHoveredEdge(null); markDirty(); }}>
+                      <title>Click to delete this connection</title>
+                    </path>
+                  </g>
                 );
               })}
               {connecting && (
                 <path d={bez(outPortPos(nodes.find((n) => n.id === connecting.from), connecting.port), { x: connecting.x, y: connecting.y })}
-                  stroke="#9be8c0" strokeWidth="2" strokeDasharray="4 4" fill="none" />
+                  stroke="#9be8c0" strokeWidth="2" strokeDasharray="4 4" fill="none" style={{ pointerEvents: "none" }} />
               )}
             </svg>
 
             {nodes.map((n) => {
               const t = NODE_TYPES[n.type];
               const selected = sel === n.id;
+              const isConnectTarget = connecting && connecting.from !== n.id && n.type !== "welcome";
               return (
-                <div key={n.id}
-                  style={{ ...S.node, left: n.x, top: n.y, height: nodeH(n), borderColor: selected ? t.color : "#1d3328", boxShadow: selected ? `0 0 0 2px ${t.color}55, 0 10px 24px rgba(0,0,0,.45)` : "0 8px 20px rgba(0,0,0,.35)" }}
-                  onClick={(e) => { e.stopPropagation(); setSel(n.id); }}>
-                  <div style={{ ...S.nodeHeader, background: t.color + "22", color: t.color }} onPointerDown={(e) => startDrag(e, n)}>
+                <div key={n.id} data-node-id={n.id}
+                  style={{
+                    ...S.node, left: n.x, top: n.y, height: nodeH(n),
+                    borderColor: isConnectTarget ? "#9be8c0" : selected ? t.color : "#1d3328",
+                    boxShadow: selected ? `0 0 0 2px ${t.color}55, 0 10px 24px rgba(0,0,0,.45)` : "0 8px 20px rgba(0,0,0,.35)",
+                    cursor: isConnectTarget ? "crosshair" : undefined,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (connecting) { connectTo(n.id); return; }
+                    setSel(n.id);
+                  }}>
+                  <div style={{ ...S.nodeHeader, background: t.color + "22", color: t.color }} onPointerDown={(e) => { if (!connecting) startDrag(e, n); }}>
                     <span>{t.icon} {t.label}</span>
                     {n.type === "welcome" && <span style={S.entryBadge}>ENTRY</span>}
                   </div>
@@ -587,12 +705,22 @@ export default function App() {
                     ))}
                   </div>
                   {n.type !== "welcome" && (
-                    <div style={{ ...S.port, left: -7, top: 11, background: connecting ? "#9be8c0" : "#5c8a72" }}
-                      onClick={(e) => finishConnect(e, n)} title="input" />
+                    <div style={{
+                      ...S.port, left: -7, top: 11,
+                      background: isConnectTarget ? "#9be8c0" : "#5c8a72",
+                      boxShadow: isConnectTarget ? "0 0 0 4px #9be8c044" : "none",
+                      transform: isConnectTarget ? "scale(1.3)" : "none",
+                    }}
+                      onClick={(e) => { e.stopPropagation(); connectTo(n.id); }} title="input — drop or click a wire here" />
                   )}
                   {Array.from({ length: outputCount(n) }).map((_, i) => (
-                    <div key={i} style={{ ...S.port, right: -7, top: outPortPos(n, i).y - n.y - 7, background: t.color }}
-                      onPointerDown={(e) => startConnect(e, n, i)} title="drag out" />
+                    <div key={i}
+                      style={{
+                        ...S.port, right: -7, top: outPortPos(n, i).y - n.y - 7, background: t.color,
+                        boxShadow: connecting?.from === n.id && connecting?.port === i ? `0 0 0 4px ${t.color}55` : "none",
+                      }}
+                      onPointerDown={(e) => startConnect(e, n, i)}
+                      title={outputCount(n) > 1 ? `drag to connect · ${portLabel(n, i)}` : "drag to connect"} />
                   ))}
                 </div>
               );
@@ -628,13 +756,13 @@ export default function App() {
                   <div style={{ fontSize: 11, color: "#7d9c8c" }}>Use later as {"{" + selNode.config.field + "}"} in a Goodbye block.</div>
                 </>)}
 
-                {selNode.type === "menu" && (<>
-                  <Field label="Menu prompt">
+                {menuLikeTypes.has(selNode.type) && (<>
+                  <Field label="Prompt">
                     <textarea style={S.textarea} rows={2} value={selNode.config.prompt}
                       onChange={(e) => updateConfig(selNode.id, { prompt: e.target.value })} />
                   </Field>
                   <Field label="Options (each gets its own output dot)">
-                    {selNode.config.options.map((o, i) => (
+                    {(selNode.config.options || []).map((o, i) => (
                       <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
                         <input style={{ ...S.input, flex: 1 }} value={o}
                           onChange={(e) => {
@@ -642,16 +770,11 @@ export default function App() {
                             options[i] = e.target.value;
                             updateConfig(selNode.id, { options });
                           }} />
-                        <button style={S.miniBtn} onClick={() => {
-                          const options = selNode.config.options.filter((_, j) => j !== i);
-                          if (!options.length) return;
-                          updateConfig(selNode.id, { options });
-                          setEdges((es) => es.filter((e2) => !(e2.from === selNode.id && e2.fromPort === i)));
-                        }}>✕</button>
+                        <button style={S.miniBtn} title="Remove option" onClick={() => removeOption(selNode, i)}>✕</button>
                       </div>
                     ))}
-                    {selNode.config.options.length < 5 && (
-                      <button style={S.addBtn} onClick={() => updateConfig(selNode.id, { options: [...selNode.config.options, "New option"] })}>+ Add option</button>
+                    {(selNode.config.options || []).length < 6 && (
+                      <button style={S.addBtn} onClick={() => updateConfig(selNode.id, { options: [...(selNode.config.options || []), "New option"] })}>+ Add option</button>
                     )}
                   </Field>
                 </>)}
@@ -674,7 +797,7 @@ export default function App() {
                   </Field>
                 )}
 
-                {!["welcome", "goodbye", "collect", "menu", "faq"].includes(selNode.type) && (
+                {!["welcome", "goodbye", "collect", "faq"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
                   <GenericConfig node={selNode} updateConfig={updateConfig} />
                 )}
 
@@ -822,7 +945,7 @@ export default function App() {
                       <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code> (Meta needs https).</li>
                       <li>Meta App → WhatsApp → Configuration → Webhook: paste Callback URL + Verify token, click Verify & save.</li>
                       <li>Subscribe to the <b>messages</b> webhook field.</li>
-                      <li>API Setup me apna personal number recipient me add karke message bhejo — bot reply karega. 🎉</li>
+                      <li>In API Setup, add your personal WhatsApp number as a recipient, then message the test number — the bot will reply. 🎉</li>
                     </ol>
                   </>) : provider === "green" ? (<>
                     Webhook URL (paste in Green API instance settings):
@@ -868,7 +991,7 @@ export default function App() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 13 }}>{botName}</div>
                 <div style={{ fontSize: 10.5, color: activated ? "#9be8c0" : "#8fae9d" }}>
-                  {activated ? "online · backend engine" : "activate to test"}
+                  {activated ? "online · live webhook" : botId ? "test mode · backend engine" : "save the flow to test"}
                 </div>
               </div>
               <button style={{ ...S.miniBtn, marginLeft: "auto" }} onClick={resetChat}>↺ reset</button>
@@ -888,11 +1011,11 @@ export default function App() {
             </div>
             <div style={S.phoneInput}>
               <input style={{ ...S.input, flex: 1, borderRadius: 20 }}
-                placeholder={activated ? "Type a message…" : "Activate the bot first"}
-                disabled={!activated} value={chatInput}
+                placeholder={botId ? "Type a message…" : "Save the flow first"}
+                disabled={!botId} value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendChat()} />
-              <button style={{ ...S.primaryBtn, borderRadius: 20, padding: "8px 16px" }} disabled={!activated} onClick={sendChat}>➤</button>
+              <button style={{ ...S.primaryBtn, borderRadius: 20, padding: "8px 16px", opacity: botId ? 1 : 0.45 }} disabled={!botId} onClick={sendChat}>➤</button>
             </div>
           </div>
         </div>

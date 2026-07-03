@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // polling avoids ENOSPC when the OS inotify watcher limit is exhausted;
+    // remove if you raise fs.inotify.max_user_watches and prefer lower CPU use
+    watch: { usePolling: true },
     proxy: {
       "/api": "http://localhost:3001",
       "/whatsapp": "http://localhost:3001",

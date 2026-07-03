@@ -25,17 +25,36 @@ app.use(express.urlencoded({ extended: false })); // Twilio posts urlencoded
 // async route wrapper → any thrown/rejected error hits the error middleware
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// In-memory chat sessions: key = botId + "|" + phone
+// In-memory chat sessions: key = botId + "|" + phone.
+// Idle sessions expire so the map can't grow without bound.
+const SESSION_TTL_MS = 60 * 60 * 1000;
 const sessions = new Map();
 const getSession = (key) => {
   if (!sessions.has(key)) sessions.set(key, { state: null, vars: {} });
-  return sessions.get(key);
+  const s = sessions.get(key);
+  s.lastSeen = Date.now();
+  return s;
 };
+setInterval(() => {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [key, s] of sessions) if ((s.lastSeen || 0) < cutoff) sessions.delete(key);
+}, 10 * 60 * 1000).unref();
 
 const NODE_LIMIT = 50;
 const validateFlow = (body) => {
   if (!Array.isArray(body.nodes) || !Array.isArray(body.edges)) return "nodes and edges arrays required";
   if (body.nodes.length > NODE_LIMIT) return "too many blocks";
+  if (body.edges.length > NODE_LIMIT * 8) return "too many connections";
+  const ids = new Set();
+  for (const n of body.nodes) {
+    if (!n || typeof n.id !== "string" || typeof n.type !== "string") return "every block needs an id and a type";
+    if (n.config !== undefined && (typeof n.config !== "object" || n.config === null || Array.isArray(n.config))) return "block config must be an object";
+    if (ids.has(n.id)) return "duplicate block id";
+    ids.add(n.id);
+  }
+  for (const e of body.edges) {
+    if (!e || !ids.has(e.from) || !ids.has(e.to)) return "a connection references a missing block";
+  }
   return null;
 };
 

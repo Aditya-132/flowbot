@@ -3,7 +3,8 @@
 // NO AI anywhere. Used by live webhooks, simulator, and codegen.
 // ============================================================
 
-const interp = (msg, vars) => String(msg || "").replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? k);
+// Unresolved {vars} stay visible as {var} — clearer than silently printing the key.
+const interp = (msg, vars) => String(msg || "").replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
 
 const menuTypes = new Set(["menu", "quick_reply", "language", "lead_qualify"]);
 const collectConfig = {
@@ -75,6 +76,13 @@ function isOpenNow(c) {
  * @returns {string[]}      bot replies
  */
 function handleMessage(flow, text, session) {
+  const replies = processMessage(flow, text, session);
+  // never leave the customer on silence when a branch dead-ends
+  if (!replies.length) replies.push("✅ That's all for now. Send any message to start over.");
+  return replies;
+}
+
+function processMessage(flow, text, session) {
   const out = [];
   const byId = Object.fromEntries(flow.nodes.map((n) => [n.id, n]));
   const next = (id, port) => getNext(flow, byId, id, port);
@@ -239,13 +247,24 @@ function handleMessage(flow, text, session) {
   const c = cur.config || {};
 
   if (menuTypes.has(cur.type)) {
-    const idx = parseInt(t, 10) - 1;
     const options = c.options || [];
-    if (Number.isInteger(idx) && idx >= 0 && idx < options.length) {
+    const lower = t.toLowerCase();
+    // accept the option number, the exact option text, or an unambiguous prefix
+    let idx = /^\d+$/.test(t) ? parseInt(t, 10) - 1 : -1;
+    if (!(idx >= 0 && idx < options.length)) {
+      idx = options.findIndex((o) => String(o).toLowerCase() === lower);
+    }
+    if (idx < 0 && lower.length >= 3) {
+      const prefixHits = options
+        .map((o, i) => (String(o).toLowerCase().startsWith(lower) ? i : -1))
+        .filter((i) => i >= 0);
+      if (prefixHits.length === 1) idx = prefixHits[0];
+    }
+    if (idx >= 0 && idx < options.length) {
       session.vars[`${cur.type}_choice`] = options[idx];
       continueOrEnd(cur, idx);
     } else {
-      out.push(`Please reply with a number between 1 and ${options.length}.`);
+      out.push(`Sorry, I didn't catch that.\n\n${optionPrompt(c, session.vars)}`);
     }
     return out;
   }
@@ -261,6 +280,18 @@ function handleMessage(flow, text, session) {
   }
 
   if (collectConfig[cur.type]) {
+    if (!t) {
+      out.push(interp(c.question || collectConfig[cur.type].question || "Please share the details:", session.vars));
+      return out;
+    }
+    if (cur.type === "collect_email" && !/^\S+@\S+\.\S+$/.test(t)) {
+      out.push("That doesn't look like a valid email — please try again (e.g. name@example.com).");
+      return out;
+    }
+    if (cur.type === "collect_phone" && t.replace(/\D/g, "").length < 7) {
+      out.push("That doesn't look like a valid phone number — please send your full number with area code.");
+      return out;
+    }
     session.vars[fieldName(cur)] = t;
     const meta = collectConfig[cur.type];
     const ack = c.ack || meta.ack || "Got it.";
@@ -292,8 +323,9 @@ function handleMessage(flow, text, session) {
     return out;
   }
 
+  // state pointed at a non-interactive block (stale flow edit) — restart cleanly
   session.state = null;
-  return out;
+  return handleMessage(flow, text, session);
 }
 
 module.exports = { handleMessage, interp };

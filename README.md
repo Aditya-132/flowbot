@@ -68,15 +68,18 @@ Open http://localhost:5173
 
 ## Use it
 
-1. **Design flow** — add blocks from the palette, drag to arrange, wire them:
-   click a block's **right dot**, then another block's **left dot**. Click a wire to delete it.
-   Click a block to edit its texts in the right panel. Hit **💾 Save**.
+1. **Design flow** — add blocks from the palette, drag them by their header to arrange.
+   To wire blocks: **drag from a block's right dot onto the target block** (or click the
+   dot, then click the target). Branching blocks (Menu, Quick Replies, Condition, …) get
+   one right dot per option. Click a wire to delete it, **Esc** cancels a pending wire,
+   **Delete** removes the selected block. Click a block to edit its texts in the right
+   panel. Hit **💾 Save**.
 2. **Bot code** — see the standalone `server.js` generated for your flow.
    Copy or download it; it runs anywhere with just `npm install express`.
-3. **Activate & test** — pick Meta Cloud API, Green API, Whapi.cloud, or Twilio, paste the
-   provider credentials, and hit **🚀 Activate**.
-   Then chat with your bot in the phone simulator — it runs through the *same backend
-   engine* that serves the real webhook.
+3. **Activate & test** — the phone simulator works as soon as the flow is saved; it runs
+   through the *same backend engine* that serves the real webhook. To go live, pick
+   Meta Cloud API, Green API, Whapi.cloud, or Twilio, paste the provider credentials,
+   and hit **🚀 Activate**.
 
 ## Go live on real WhatsApp
 
