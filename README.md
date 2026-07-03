@@ -1,7 +1,17 @@
-# ⚡ FlowBot — Flowchart → WhatsApp Bot Builder (Full-Stack Prototype)
+# ⚡ FlowBot — Free WhatsApp Bot Builder (Drag & Drop, No Code, No AI)
 
-Design a flowchart in the browser, and FlowBot turns it into a working WhatsApp bot —
+**FlowBot is a full-stack, no-code WhatsApp chatbot builder.** Design your bot as a
+flowchart in the browser and FlowBot turns it into a working WhatsApp bot —
 **deterministically, from pre-embedded code templates. No AI anywhere in the bot runtime.**
+
+✨ Highlights: 38+ ready feature blocks · 🧪 **Block Lab** to invent your own blocks from steps ·
+🏨 rich templates (Hotel Paradise Hyderabad — 77 blocks, restaurant, bank, chess academy, online
+store) · 💬 live chat simulator · 🔐 multi-user accounts with per-user bots · 🚀 one-click
+activation on **Meta WhatsApp Cloud API, Twilio, Green API or Whapi.cloud** · 📦 export your
+bot's **complete Node.js code as a ZIP**.
+
+`whatsapp-bot` `chatbot-builder` `no-code` `drag-and-drop` `whatsapp-business-api`
+`meta-cloud-api` `twilio` `nodejs` `react` `postgresql`
 
 ```
 ┌──────────────┐   REST API    ┌──────────────────┐  webhooks  ┌──────────────────┐
@@ -14,7 +24,7 @@ Design a flowchart in the browser, and FlowBot turns it into a working WhatsApp 
                                  └──────────────┘
 ```
 
-## The 35 pre-embedded features
+## The 38 pre-embedded features (+ your own via Block Lab)
 
 FlowBot now includes the original conversation blocks plus 30 more practical
 WhatsApp automation blocks inspired by common ecommerce/support workflows:
@@ -28,6 +38,8 @@ WhatsApp automation blocks inspired by common ecommerce/support workflows:
 | Booking/support | Appointment, Booking Confirm, Business Hours, Human Handoff |
 | Feedback | CSAT Rating, Feedback, Review Request |
 | Routing/logic | Language Router, Condition, Set Variable, Tag Customer, Save Note |
+| Info & inputs | Collect Number (validated), Location/Map, Contact Card |
+| 🧪 Block Lab | Build your own blocks from steps: say / ask (validated) / set variable / choices |
 | Media/utilities | Send Link, Image / Media Link |
 
 Each block maps to a fixed handler in `backend/engine.js`. Generating a bot is just:

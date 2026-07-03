@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a120d"/>
+      <stop offset="1" stop-color="#0d2a1a"/>
+    </linearGradient>
+    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#25D366"/>
+      <stop offset="1" stop-color="#128C7E"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g fill="none" stroke="#1a2f22" stroke-width="2">
+    <circle cx="80" cy="90" r="3" fill="#1a2f22"/><circle cx="1120" cy="540" r="3" fill="#1a2f22"/>
+    <circle cx="1050" cy="120" r="3" fill="#1a2f22"/><circle cx="150" cy="520" r="3" fill="#1a2f22"/>
+  </g>
+  <rect x="80" y="80" width="120" height="120" rx="28" fill="url(#logo)"/>
+  <path d="M148 100 L112 156 h20 L128 200 L168 140 h-22 z" fill="#06130b"/>
+  <text x="230" y="170" font-family="Arial, sans-serif" font-size="72" font-weight="800" fill="#e6f4ec">FlowBot</text>
+  <text x="82" y="300" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#25D366">WhatsApp Bot Builder — no code, no AI</text>
+  <text x="82" y="370" font-family="Arial, sans-serif" font-size="30" fill="#9be8c0">Drag &amp; drop flowchart  ·  38+ blocks  ·  Block Lab for custom blocks</text>
+  <text x="82" y="420" font-family="Arial, sans-serif" font-size="30" fill="#9be8c0">Templates  ·  Live simulator  ·  Meta / Twilio / Green API / Whapi</text>
+  <text x="82" y="470" font-family="Arial, sans-serif" font-size="30" fill="#9be8c0">Export your bot's full code as a ZIP</text>
+  <rect x="82" y="520" width="330" height="60" rx="14" fill="#25D366"/>
+  <text x="112" y="560" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#06130b">Build your bot free</text>
+</svg>

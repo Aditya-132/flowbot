@@ -40,10 +40,15 @@ export default function AuthPage({ onAuth }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
           <div style={S.logo}>⚡</div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 20 }}>FlowBot</div>
-            <div style={{ fontSize: 11, color: "#8fae9d" }}>flowchart → WhatsApp bot · no-AI runtime</div>
+            <h1 style={{ fontWeight: 800, fontSize: 20, margin: 0 }}>FlowBot — WhatsApp Bot Builder</h1>
+            <div style={{ fontSize: 11, color: "#8fae9d" }}>drag & drop flowchart → live WhatsApp bot · no code, no AI</div>
           </div>
         </div>
+        <p style={{ fontSize: 12, color: "#8fae9d", margin: 0, lineHeight: 1.55 }}>
+          38+ ready blocks, hotel/restaurant/bank/store templates, a Block Lab to invent your own
+          blocks, a live simulator — go live on Meta, Twilio, Green API or Whapi, or export your
+          bot's full code as a ZIP.
+        </p>
 
         <div style={S.tabs}>
           <button style={{ ...S.tab, ...(mode === "login" ? S.tabActive : {}) }} onClick={() => switchMode("login")}>

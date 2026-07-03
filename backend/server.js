@@ -369,6 +369,28 @@ app.get("/api/healthz", (_req, res) => {
   res.json({ ok: true, service: "flowbot-backend" });
 });
 
+/* ------------------- SEO: robots.txt + sitemap.xml ------------------- */
+// Generated from the request host so they stay correct on any domain
+// (Render, Railway, custom domain) without hardcoding.
+const siteBase = (req) => {
+  const proto = req.headers["x-forwarded-proto"]?.split(",")[0] || req.protocol || "https";
+  const host = req.headers["x-forwarded-host"]?.split(",")[0] || req.headers.host || "localhost";
+  return `${proto}://${host}`;
+};
+
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain").send(
+    `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /meta/\nDisallow: /green/\nDisallow: /whapi/\nDisallow: /whatsapp/\n\nSitemap: ${siteBase(req)}/sitemap.xml\n`
+  );
+});
+
+app.get("/sitemap.xml", (req, res) => {
+  const base = siteBase(req);
+  res.type("application/xml").send(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${base}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`
+  );
+});
+
 /* ------------------- Built frontend (production deploys) ------------------- */
 const frontendDist = path.join(__dirname, "../frontend/dist");
 if (fs.existsSync(frontendDist)) {
