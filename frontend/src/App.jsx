@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { api, getToken, setToken } from "./api.js";
 import AuthPage from "./Auth.jsx";
+import { TEMPLATES } from "./templates.js";
 
 /* ============================================================
    FlowBot — WhatsApp Bot Builder (full-stack)
@@ -394,6 +395,16 @@ function Builder({ user, onLogout }) {
     setDirty(true); setSel(null); setChat([]); setTab(0);
   }
 
+  function loadTemplate(key) {
+    const t = TEMPLATES[key];
+    if (!t) return;
+    newFlow();
+    setBotName(t.name);
+    setNodes(t.nodes());
+    setEdges(t.edges());
+    flash(`${t.emoji} Template loaded: ${t.name} — hit Save to keep it`);
+  }
+
   /* ---------- tab switching (auto-saves before code/activate) ---------- */
   async function goTab(i) {
     if (i > 0) {
@@ -577,13 +588,18 @@ function Builder({ user, onLogout }) {
     try { document.execCommand("copy"); flash("✓ Code copied"); } catch {}
     document.body.removeChild(ta);
   };
-  const downloadCode = () => {
-    const blob = new Blob([code], { type: "text/javascript" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "server.js";
-    a.click();
-    URL.revokeObjectURL(a.href);
+  const downloadZip = async () => {
+    const id = await ensureSaved();
+    if (!id) return;
+    try {
+      const blob = await api.getCodeZip(id);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(botName || "flowbot").toLowerCase().replace(/[^a-z0-9-]+/g, "-")}-bot.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      flash("📦 Full project downloaded as ZIP");
+    } catch (e) { flash("Download failed: " + e.message, true); }
   };
 
   const S = styles;
@@ -619,6 +635,13 @@ function Builder({ user, onLogout }) {
             ))}
           </select>
           <button style={S.ghostBtn} onClick={newFlow}>+ New</button>
+          <select style={{ ...S.input, width: 180 }} value=""
+            onChange={(e) => e.target.value && loadTemplate(e.target.value)}>
+            <option value="">✨ Start from template…</option>
+            {Object.entries(TEMPLATES).map(([k, t]) => (
+              <option key={k} value={k}>{t.emoji} {t.name}</option>
+            ))}
+          </select>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {["1 · Design flow", "2 · Bot code", "3 · Activate & test"].map((t, i) => (
@@ -851,8 +874,8 @@ function Builder({ user, onLogout }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button style={S.ghostBtn} onClick={downloadCode}>⬇ Download server.js</button>
-              <button style={S.primaryBtn} onClick={copyCode}>Copy code</button>
+              <button style={S.ghostBtn} onClick={copyCode}>Copy server.js</button>
+              <button style={S.primaryBtn} onClick={downloadZip}>📦 Download full code (ZIP)</button>
             </div>
           </div>
           {!hasWelcome && <div style={S.warnBar}>⚠️ Your flow has no Welcome block, so the bot has no entry point yet.</div>}

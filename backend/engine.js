@@ -76,7 +76,9 @@ function isOpenNow(c) {
  * @returns {string[]}      bot replies
  */
 function handleMessage(flow, text, session) {
-  const replies = processMessage(flow, text, session);
+  // drop empty strings so optional messages (blank condition/hours text) never
+  // reach the provider — WhatsApp APIs reject empty bodies
+  const replies = processMessage(flow, text, session).map((r) => String(r ?? "").trim()).filter(Boolean);
   // never leave the customer on silence when a branch dead-ends
   if (!replies.length) replies.push("✅ That's all for now. Send any message to start over.");
   return replies;
@@ -249,8 +251,9 @@ function processMessage(flow, text, session) {
   if (menuTypes.has(cur.type)) {
     const options = c.options || [];
     const lower = t.toLowerCase();
-    // accept the option number, the exact option text, or an unambiguous prefix
-    let idx = /^\d+$/.test(t) ? parseInt(t, 10) - 1 : -1;
+    // accept the option number ("2", "2." or "2)"), the exact option text, or an unambiguous prefix
+    const num = t.match(/^(\d+)\s*[.)]?$/);
+    let idx = num ? parseInt(num[1], 10) - 1 : -1;
     if (!(idx >= 0 && idx < options.length)) {
       idx = options.findIndex((o) => String(o).toLowerCase() === lower);
     }
@@ -262,6 +265,8 @@ function processMessage(flow, text, session) {
     }
     if (idx >= 0 && idx < options.length) {
       session.vars[`${cur.type}_choice`] = options[idx];
+      session.vars.choice = options[idx]; // generic alias for condition blocks
+      if (cur.type === "language") session.vars.language = options[idx];
       continueOrEnd(cur, idx);
     } else {
       out.push(`Sorry, I didn't catch that.\n\n${optionPrompt(c, session.vars)}`);
@@ -295,7 +300,8 @@ function processMessage(flow, text, session) {
     session.vars[fieldName(cur)] = t;
     const meta = collectConfig[cur.type];
     const ack = c.ack || meta.ack || "Got it.";
-    out.push(interp(ack, session.vars));
+    // acks may reference config fields too (e.g. tracking_link's {baseUrl})
+    out.push(interp(ack, { ...c, ...session.vars }));
     continueOrEnd(cur, 0);
     return out;
   }
@@ -319,7 +325,9 @@ function processMessage(flow, text, session) {
     }
     session.vars[c.field || "rating"] = String(rating);
     out.push(interp(c.thanks || "Thanks for rating us {rating}/5.", session.vars));
-    continueOrEnd(cur, rating - 1);
+    // fall back to the first wired port so a single outgoing wire covers all ratings
+    const port = firstEdge(flow, cur.id, rating - 1) ? rating - 1 : 0;
+    continueOrEnd(cur, port);
     return out;
   }
 

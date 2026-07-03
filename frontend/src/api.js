@@ -32,4 +32,9 @@ export const api = {
   activate: (id, creds) => send(`/api/flows/${id}/activate`, "POST", creds).then(j),
   simulate: (id, payload) => send(`/api/flows/${id}/simulate`, "POST", payload).then(j),
   getCode: (id) => get(`/api/flows/${id}/code`).then((r) => r.text()),
+  getCodeZip: (id) =>
+    get(`/api/flows/${id}/code.zip`).then((r) => {
+      if (!r.ok) return Promise.reject(new Error(r.statusText));
+      return r.blob();
+    }),
 };

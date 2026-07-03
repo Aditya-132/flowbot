@@ -12,7 +12,8 @@ const path = require("path");
 const store = require("./store");
 const auth = require("./auth");
 const { handleMessage } = require("./engine");
-const { generateStandalone } = require("./codegen");
+const { generateStandalone, generateProject } = require("./codegen");
+const { buildZip } = require("./zip");
 const metaApi = require("./meta");
 const greenApi = require("./green");
 const whapi = require("./whapi");
@@ -208,6 +209,16 @@ app.get("/api/flows/:id/code", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
   if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   res.type("text/plain").send(generateStandalone(f));
+}));
+
+// full project (server.js + package.json + README + .env.example) as a ZIP
+app.get("/api/flows/:id/code.zip", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const safe = (f.name || "flowbot").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "flowbot";
+  res.set("Content-Type", "application/zip");
+  res.set("Content-Disposition", `attachment; filename="${safe}-bot.zip"`);
+  res.send(buildZip(generateProject(f)));
 }));
 
 /* ------------------- Live Twilio webhook ------------------- */
