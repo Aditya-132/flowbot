@@ -194,8 +194,10 @@ function missingVar(node, vars) {
      { kind: "set",    field, value }
      { kind: "ask",    question, field, validate: text|number|email|phone, ack? }
      { kind: "api",    method, url, headers[], body, field, jsonPath, errorMessage }
+     { kind: "ai",     provider, apiKey, model, baseUrl, context, greeting, errorMessage }
      { kind: "choice", prompt, options[] }  → branches to output port = option index
-   Steps run in order; ask/choice pause for the user's reply. */
+   Steps run in order; ask/ai/choice pause for the user's reply (ai chats
+   until the customer types 0, then the remaining steps continue). */
 
 async function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn) {
   const steps = (node.config && Array.isArray(node.config.steps) ? node.config.steps : []);
@@ -219,6 +221,10 @@ async function runCustomSteps(node, session, out, startIdx, interpFn, optionProm
       out.push(interpFn(s.question || "Please share:", session.vars));
       session.state = `step|${node.id}|${i}`;
       return true; // waiting for the user's answer
+    } else if (s.kind === "ai") {
+      out.push(interpFn(s.greeting || "🤖 You're chatting with our AI assistant now. Ask anything — type 0 to continue.", session.vars));
+      session.state = `step|${node.id}|${i}`;
+      return true; // AI chat mode until the customer types 0
     } else if (s.kind === "choice") {
       out.push(optionPromptFn({ prompt: s.prompt, options: s.options }, session.vars));
       session.state = `step|${node.id}|${i}`;
@@ -533,6 +539,30 @@ async function processMessage(flow, text, session) {
       if (s.ack) out.push(interp(s.ack, session.vars));
       const waiting = await runCustomSteps(node, session, out, idx + 1, interp, optionPrompt);
       if (!waiting) await continueOrEnd(node, 0);
+      return out;
+    }
+    // ai step: chat with the owner's LLM until the customer types 0, then resume steps
+    if (s.kind === "ai") {
+      if (t === "0" || /^(exit|menu|back)$/i.test(t)) {
+        delete (session.aiHist || {})[`${nodeId}:${idx}`];
+        session.state = null;
+        const waiting = await runCustomSteps(node, session, out, idx + 1, interp, optionPrompt);
+        if (!waiting) await continueOrEnd(node, 0);
+        return out;
+      }
+      if (!t) {
+        out.push(interp(s.greeting || "🤖 Ask me anything — type 0 to continue.", session.vars));
+        return out;
+      }
+      const hist = ((session.aiHist ??= {})[`${nodeId}:${idx}`] ??= []);
+      const r = await aiReply(s, hist, t, session.vars);
+      if (r.ok) {
+        hist.push({ role: "user", content: t }, { role: "assistant", content: r.text });
+        if (hist.length > 12) hist.splice(0, hist.length - 12);
+        out.push(r.text);
+      } else {
+        out.push(`${interp(s.errorMessage || "Sorry, I'm having trouble thinking right now. Type 0 to continue.", session.vars)} (${r.error})`);
+      }
       return out;
     }
     // choice step: same matching rules as menus, then branch to that port
