@@ -2,7 +2,9 @@
 
 **FlowBot is a full-stack, no-code WhatsApp chatbot builder.** Design your bot as a
 flowchart in the browser and FlowBot turns it into a working WhatsApp bot —
-**deterministically, from pre-embedded code templates. No AI anywhere in the bot runtime.**
+**deterministically, from pre-embedded code templates. No AI required** — the runtime is
+deterministic by default; an optional **AI Reply block** runs only if you bring your own
+Anthropic/OpenAI/Gemini API key.
 
 🌐 **Live: [flochatbot.com](https://flochatbot.com)**
 
@@ -27,7 +29,7 @@ bot's **complete Node.js code as a ZIP**.
                                  └──────────────┘
 ```
 
-## The 39 pre-embedded features (+ your own via Block Lab)
+## The 40 pre-embedded features (+ your own via Block Lab)
 
 FlowBot now includes the original conversation blocks plus 30+ more practical
 WhatsApp automation blocks inspired by common ecommerce/support workflows:
@@ -42,6 +44,7 @@ WhatsApp automation blocks inspired by common ecommerce/support workflows:
 | Feedback | CSAT Rating, Feedback, Review Request |
 | Routing/logic | Language Router, Condition, Set Variable, Tag Customer, Save Note |
 | 🌐 Integrations | HTTP Request / API — GET/POST/PUT/PATCH/DELETE with headers, `{var}` templating in URL/body, JSON-path response extraction, success/error branches |
+| 🤖 AI (optional, BYOK) | AI Reply — customers chat with an LLM using **your own** Anthropic / OpenAI / Gemini key (or any OpenAI-compatible base URL); type 0 to return to the deterministic flow |
 | Info & inputs | Collect Number (validated), Location/Map, Contact Card |
 | 🧪 Block Lab | Build your own blocks from steps: say / ask (validated) / set variable / call an API / choices |
 | Media/utilities | Send Link, Image / Media Link |

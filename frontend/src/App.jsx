@@ -205,6 +205,19 @@ const NODE_TYPES = {
     }),
     outputs: () => 2,
   },
+  ai_reply: {
+    label: "AI Reply (your API key)", icon: "🤖", color: "#A855F7",
+    desc: "Optional AI chat mode with YOUR OpenAI / Claude / Gemini key. Customer chats with the AI until they type 0, then the flow continues.",
+    defaults: () => ({
+      greeting: "🤖 You're chatting with our AI assistant now. Ask me anything — type 0 to go back.",
+      context: "You are a helpful assistant for <your business name>. Be brief, friendly and accurate. If you are not sure, say a human teammate will follow up.",
+      provider: "anthropic",
+      apiKey: "",
+      model: "claude-haiku-4-5",
+      baseUrl: "",
+      errorMessage: "Sorry, I'm having trouble thinking right now. Type 0 to continue.",
+    }),
+  },
   payment_link: {
     label: "Payment Link", icon: "💳", color: "#10B981",
     desc: "Shares checkout or payment URL.",
@@ -355,6 +368,7 @@ const nodeSummary = (n) => {
   if (n.type === "business_hours") return `${c.startHour}:00-${c.endHour}:00`;
   if (n.type === "condition") return `{${c.field}} ${c.operator || "equals"} ${c.value}`;
   if (n.type === "http_request") return `${c.method || "GET"} ${c.url || ""} → {${c.saveAs || "apiResult"}}`;
+  if (n.type === "ai_reply") return `AI chat · ${c.provider || "anthropic"} · ${c.model || "default model"}${c.apiKey ? "" : " · ⚠ no key yet"}`;
   if (n.type === "custom") return `${customSteps(n).length} step${customSteps(n).length === 1 ? "" : "s"}`;
   return c.message || c.question || c.caption || c.url || c.note || NODE_TYPES[n.type]?.desc || "";
 };
@@ -776,7 +790,7 @@ function Builder({ user, onAuthed, onLogout }) {
           <div style={S.logo}>⚡</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 16 }}>FlowBot</div>
-            {!isMobile && <div style={{ fontSize: 10.5, color: "#64748b" }}>flowchart → WhatsApp bot · no-AI runtime</div>}
+            {!isMobile && <div style={{ fontSize: 10.5, color: "#64748b" }}>flowchart → WhatsApp bot · no AI needed</div>}
           </div>
           <input style={{ ...S.input, width: isMobile ? 120 : 190 }} value={botName}
             onChange={(e) => { setBotName(e.target.value); markDirty(); }} placeholder="Bot name" />
@@ -905,7 +919,7 @@ function Builder({ user, onAuthed, onLogout }) {
 
             <div style={{ ...S.paneTitle, marginTop: 14 }}>Feature blocks</div>
             <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>
-              39 deterministic WhatsApp blocks backed by pre-written server handlers.
+              40 ready-made WhatsApp blocks backed by pre-written server handlers — deterministic by default, AI only if you add your own key.
             </div>
             {Object.entries(NODE_TYPES).map(([k, t]) => (
               <button key={k} onClick={() => { addNode(k); if (isMobile) setShowPalette(false); }} style={S.paletteItem}>
@@ -1161,7 +1175,55 @@ function Builder({ user, onAuthed, onLogout }) {
                   </div>
                 </>)}
 
-                {!["welcome", "goodbye", "collect", "faq", "custom", "http_request"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
+                {selNode.type === "ai_reply" && (<>
+                  <Field label="AI provider">
+                    <select style={S.input} value={selNode.config.provider || "anthropic"}
+                      onChange={(e) => {
+                        const provider = e.target.value;
+                        const models = { anthropic: "claude-haiku-4-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
+                        updateConfig(selNode.id, { provider, model: models[provider] || "" });
+                      }}>
+                      <option value="anthropic">Anthropic (Claude)</option>
+                      <option value="openai">OpenAI / compatible</option>
+                      <option value="gemini">Google Gemini</option>
+                    </select>
+                  </Field>
+                  <Field label="Your API key">
+                    <input style={S.input} type="password" placeholder="paste your provider API key"
+                      value={selNode.config.apiKey || ""}
+                      onChange={(e) => updateConfig(selNode.id, { apiKey: e.target.value.trim() })} />
+                  </Field>
+                  <Field label="Model">
+                    <input style={S.input} value={selNode.config.model || ""}
+                      onChange={(e) => updateConfig(selNode.id, { model: e.target.value.trim() })} />
+                  </Field>
+                  {(selNode.config.provider || "anthropic") === "openai" && (
+                    <Field label="Base URL (optional — Groq, OpenRouter…)">
+                      <input style={S.input} placeholder="https://api.openai.com"
+                        value={selNode.config.baseUrl || ""}
+                        onChange={(e) => updateConfig(selNode.id, { baseUrl: e.target.value.trim() })} />
+                    </Field>
+                  )}
+                  <Field label="Business context (the AI's instructions)">
+                    <textarea style={S.textarea} rows={5} value={selNode.config.context || ""}
+                      placeholder="Describe your business, prices, policies — the AI answers only from this."
+                      onChange={(e) => updateConfig(selNode.id, { context: e.target.value })} />
+                  </Field>
+                  <Field label="Greeting (shown when AI chat starts)">
+                    <textarea style={S.textarea} rows={2} value={selNode.config.greeting || ""}
+                      onChange={(e) => updateConfig(selNode.id, { greeting: e.target.value })} />
+                  </Field>
+                  <Field label="Error message (if the AI can't reply)">
+                    <textarea style={S.textarea} rows={2} value={selNode.config.errorMessage || ""}
+                      onChange={(e) => updateConfig(selNode.id, { errorMessage: e.target.value })} />
+                  </Field>
+                  <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
+                    Your key is stored with your bot and used only on the server — never shown to customers.
+                    You pay your provider directly. Customer types <b>0</b> to leave AI chat and continue the flow.
+                  </div>
+                </>)}
+
+                {!["welcome", "goodbye", "collect", "faq", "custom", "http_request", "ai_reply"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
                   <GenericConfig node={selNode} updateConfig={updateConfig} />
                 )}
 

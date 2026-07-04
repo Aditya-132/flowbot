@@ -70,6 +70,68 @@ async function httpRequest(c, vars) {
   }
 }
 
+/* ---------- AI Reply block (BYOK — bring your own key) ----------
+   Optional and off by default: the deterministic flow is untouched unless the
+   owner drops an AI Reply block AND pastes their own provider API key. When a
+   customer reaches the block, every message is answered by the owner's chosen
+   LLM (with the owner's business context as the system prompt) until the
+   customer types 0 to continue the flow. Keys are used server-side only. */
+
+const AI_PROVIDERS = new Set(["anthropic", "openai", "gemini"]);
+const AI_DEFAULT_MODELS = { anthropic: "claude-haiku-4-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
+
+async function aiReply(c, history, userText, vars) {
+  const provider = AI_PROVIDERS.has(c.provider) ? c.provider : "anthropic";
+  const apiKey = String(c.apiKey || "").trim();
+  if (!apiKey) return { ok: false, error: "no API key configured" };
+  const model = String(c.model || "").trim() || AI_DEFAULT_MODELS[provider];
+  const system = interp(
+    c.context || "You are a helpful WhatsApp assistant for a business. Keep replies short, friendly and factual. If you are not sure, say a human teammate will follow up.",
+    vars
+  );
+  const msgs = [...history.slice(-10), { role: "user", content: String(userText).slice(0, 2000) }];
+  let url, headers, body, pick;
+  if (provider === "anthropic") {
+    url = "https://api.anthropic.com/v1/messages";
+    headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" };
+    body = { model, max_tokens: 500, system, messages: msgs };
+    pick = (d) => (d.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+  } else if (provider === "gemini") {
+    url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    headers = { "x-goog-api-key": apiKey, "content-type": "application/json" };
+    body = {
+      system_instruction: { parts: [{ text: system }] },
+      contents: msgs.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+      generationConfig: { maxOutputTokens: 500 },
+    };
+    pick = (d) => (d.candidates?.[0]?.content?.parts || []).map((p) => p.text).filter(Boolean).join("\n");
+  } else {
+    // OpenAI or any OpenAI-compatible provider (Groq, OpenRouter, Mistral…) via baseUrl
+    const base = String(c.baseUrl || "https://api.openai.com").replace(/\/+$/, "");
+    url = `${base}/v1/chat/completions`;
+    let host;
+    try { host = new URL(url).hostname; } catch { return { ok: false, error: "invalid base URL" }; }
+    if (PRIVATE_HOST.test(host) && !process.env.FLOWBOT_ALLOW_PRIVATE_URLS)
+      return { ok: false, error: "private addresses are blocked" };
+    headers = { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" };
+    body = { model, max_tokens: 500, messages: [{ role: "system", content: system }, ...msgs] };
+    pick = (d) => d.choices?.[0]?.message?.content || "";
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: ctrl.signal });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    const data = await res.json();
+    const text = String(pick(data) || "").trim();
+    return text ? { ok: true, text: text.slice(0, 3500) } : { ok: false, error: "empty reply" };
+  } catch (e) {
+    return { ok: false, error: e.name === "AbortError" ? "timeout" : "network error" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function firstEdge(flow, id, port) {
   return flow.edges.find((x) => x.from === id && x.fromPort === port);
 }
@@ -413,10 +475,16 @@ async function processMessage(flow, text, session) {
           break;
         }
 
+        case "ai_reply":
+          out.push(interp(c.greeting || "🤖 You're chatting with our AI assistant now. Ask me anything — type 0 to go back.", session.vars));
+          session.state = cur.id;
+          return;
+
         case "goodbye":
           out.push(interp(c.message, session.vars));
           session.state = null;
           session.vars = {};
+          session.aiHist = {};
           return;
 
         default:
@@ -601,6 +669,25 @@ async function processMessage(flow, text, session) {
     // fall back to the first wired port so a single outgoing wire covers all ratings
     const port = firstEdge(flow, cur.id, rating - 1) ? rating - 1 : 0;
     await continueOrEnd(cur, port);
+    return out;
+  }
+
+  // AI chat mode: every message goes to the owner's LLM until the customer exits with 0
+  if (cur.type === "ai_reply") {
+    if (t === "0" || /^(exit|menu|back)$/i.test(t)) {
+      delete (session.aiHist || {})[cur.id];
+      await continueOrEnd(cur, 0);
+      return out;
+    }
+    const hist = ((session.aiHist ??= {})[cur.id] ??= []);
+    const r = await aiReply(c, hist, t, session.vars);
+    if (r.ok) {
+      hist.push({ role: "user", content: t }, { role: "assistant", content: r.text });
+      if (hist.length > 12) hist.splice(0, hist.length - 12);
+      out.push(r.text);
+    } else {
+      out.push(`${interp(c.errorMessage || "Sorry, I'm having trouble thinking right now. Type 0 to continue.", session.vars)} (${r.error})`);
+    }
     return out;
   }
 
