@@ -8,7 +8,9 @@ Anthropic/OpenAI/Gemini API key.
 
 🌐 **Live: [flochatbot.com](https://flochatbot.com)**
 
-✨ Highlights: 39+ ready feature blocks · 🌐 **HTTP Request block** (full CRUD against any API) ·
+✨ Highlights: 40 ready feature blocks · ✨ **AI Builder** — describe your bot in chat and the
+flowchart lands on your canvas, inventing custom blocks for anything not built-in (BYOK,
+builder-side only) · 🌐 **HTTP Request block** (full CRUD against any API) ·
 🧪 **Block Lab** to invent your own blocks from steps ·
 🏨 rich templates (Hotel Paradise Hyderabad — 77 blocks, restaurant, bank, chess academy, online
 store) · 💬 live chat simulator · 🔐 multi-user accounts with per-user bots · 🚀 one-click
@@ -46,7 +48,7 @@ WhatsApp automation blocks inspired by common ecommerce/support workflows:
 | 🌐 Integrations | HTTP Request / API — GET/POST/PUT/PATCH/DELETE with headers, `{var}` templating in URL/body, JSON-path response extraction, success/error branches |
 | 🤖 AI (optional, BYOK) | AI Reply — customers chat with an LLM using **your own** Anthropic / OpenAI / Gemini key (or any OpenAI-compatible base URL); type 0 to return to the deterministic flow |
 | Info & inputs | Collect Number (validated), Location/Map, Contact Card |
-| 🧪 Block Lab | Build your own blocks from steps: say / ask (validated) / set variable / call an API / choices |
+| 🧪 Block Lab | Build your own blocks from steps: say / ask (validated) / set variable / call an API / AI chat (BYOK) / choices |
 | Media/utilities | Send Link, Image / Media Link |
 
 Each block maps to a fixed handler in `backend/engine.js`. Generating a bot is just:

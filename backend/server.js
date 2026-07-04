@@ -12,6 +12,7 @@ const path = require("path");
 const store = require("./store");
 const auth = require("./auth");
 const { handleMessage } = require("./engine");
+const { generateFlow } = require("./assistant");
 const { generateStandalone, generateProject } = require("./codegen");
 const { buildZip } = require("./zip");
 const metaApi = require("./meta");
@@ -43,7 +44,7 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 const NODE_LIMIT = 150;
-const STEP_KINDS = new Set(["say", "ask", "set", "api", "choice"]);
+const STEP_KINDS = new Set(["say", "ask", "set", "api", "ai", "choice"]);
 const STEP_LIMIT = 30;
 
 // steps power user-made custom blocks — validate their shape wherever they arrive
@@ -52,7 +53,7 @@ const validateSteps = (steps) => {
   if (steps.length > STEP_LIMIT) return `a custom block can have at most ${STEP_LIMIT} steps`;
   for (const s of steps) {
     if (!s || typeof s !== "object" || Array.isArray(s)) return "every step must be an object";
-    if (!STEP_KINDS.has(s.kind)) return "step kind must be say, ask, set, api or choice";
+    if (!STEP_KINDS.has(s.kind)) return "step kind must be say, ask, set, api, ai or choice";
     if (s.kind === "choice" && (!Array.isArray(s.options) || !s.options.length || s.options.length > 8))
       return "a choice step needs 1-8 options";
     if (s.kind === "api" && typeof s.url !== "string") return "an api step needs a url";
@@ -249,6 +250,29 @@ app.post("/api/flows/:id/deactivate", wrap(async (req, res) => {
   if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   await store.upsert({ id: f.id, active: false });
   res.json({ ok: true });
+}));
+
+/* ------------------- AI Builder assistant (BYOK — user's own key) ------------------- */
+// Open to guests like the canvas itself: it only proxies the requester's own
+// LLM key to their chosen provider and validates the generated flow. Nothing
+// is stored; the bot runtime stays deterministic.
+app.post("/api/assistant", wrap(async (req, res) => {
+  const b = req.body || {};
+  if (!String(b.apiKey || "").trim()) return res.status(400).json({ error: "add your AI provider API key in the panel first" });
+  if (!String(b.message || "").trim()) return res.status(400).json({ error: "describe the bot you want" });
+  try {
+    const result = await generateFlow(
+      { provider: b.provider, apiKey: String(b.apiKey).trim(), model: b.model, baseUrl: b.baseUrl },
+      String(b.message).slice(0, 2000),
+      Array.isArray(b.history) ? b.history.slice(-8) : [],
+      b.currentFlow
+    );
+    const err = validateFlow(result.flow);
+    if (err) return res.status(422).json({ error: `generated flow was invalid (${err}) — try again` });
+    res.json(result);
+  } catch (e) {
+    res.status(422).json({ error: e.message || "generation failed — try again" });
+  }
 }));
 
 /* ------------------- Simulator (same engine as webhook) ------------------- */

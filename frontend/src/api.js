@@ -24,6 +24,8 @@ export const api = {
   logout: () => send("/api/auth/logout", "POST", {}).then(j),
   me: () => get("/api/auth/me").then(j),
 
+  assistant: (body) => send("/api/assistant", "POST", body).then(j),
+
   listBlocks: () => get("/api/blocks").then(j),
   createBlock: (body) => send("/api/blocks", "POST", body).then(j),
   updateBlock: (id, body) => send(`/api/blocks/${id}`, "PUT", body).then(j),

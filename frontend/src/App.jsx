@@ -275,6 +275,7 @@ const STEP_KINDS = {
   ask: { label: "Ask & save answer", icon: "❓" },
   set: { label: "Set variable", icon: "🧩" },
   api: { label: "Call an API (HTTP)", icon: "🌐" },
+  ai: { label: "AI chat (your API key)", icon: "🤖" },
   choice: { label: "Choices (branches)", icon: "🔀" },
 };
 const stepDefaults = {
@@ -282,6 +283,7 @@ const stepDefaults = {
   ask: () => ({ kind: "ask", question: "What's your answer?", field: "answer", validate: "text", ack: "" }),
   set: () => ({ kind: "set", field: "source", value: "whatsapp" }),
   api: () => ({ kind: "api", method: "GET", url: "", headers: [], body: "", field: "apiResult", jsonPath: "", errorMessage: "Sorry, I couldn't fetch that right now." }),
+  ai: () => ({ kind: "ai", provider: "anthropic", apiKey: "", model: "claude-haiku-4-5", baseUrl: "", greeting: "🤖 AI assistant here — ask anything, type 0 to continue.", context: "You are a helpful assistant for <your business name>. Be brief, friendly and accurate.", errorMessage: "Sorry, I can't reply right now. Type 0 to continue." }),
   choice: () => ({ kind: "choice", prompt: "Pick one:", options: ["Option A", "Option B"] }),
 };
 const stepSummary = (s) =>
@@ -289,7 +291,8 @@ const stepSummary = (s) =>
     : s.kind === "ask" ? `${s.question} → {${s.field || "value"}}`
       : s.kind === "set" ? `{${s.field}} = ${s.value}`
         : s.kind === "api" ? `${s.method || "GET"} ${s.url || ""} → {${s.field || "apiResult"}}`
-          : `${s.prompt} · ${(s.options || []).length} branches`;
+          : s.kind === "ai" ? `AI chat · ${s.provider || "anthropic"} · ${s.model || "default"}${s.apiKey ? "" : " · ⚠ no key"}`
+            : `${s.prompt} · ${(s.options || []).length} branches`;
 const customSteps = (n) => (Array.isArray(n.config?.steps) ? n.config.steps : []);
 const lastChoice = (n) => {
   const steps = customSteps(n);
@@ -428,6 +431,37 @@ function Builder({ user, onAuthed, onLogout }) {
   const [authOpen, setAuthOpen] = useState(false);
   const isMobile = useIsMobile();
   const [showPalette, setShowPalette] = useState(false); // mobile drawer
+  // ---- AI Builder (BYOK): describe a bot in chat → flow lands on the canvas ----
+  const [aiPanel, setAiPanel] = useState(false);
+  const [aiMsgs, setAiMsgs] = useState([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiCfg, setAiCfg] = useState(() => {
+    try { return { provider: "anthropic", apiKey: "", model: "claude-sonnet-5", ...(JSON.parse(localStorage.getItem("flowbot_ai_builder") || "{}")) }; }
+    catch { return { provider: "anthropic", apiKey: "", model: "claude-sonnet-5" }; }
+  });
+  const aiUndo = useRef(null); // {nodes, edges} before the last AI generation
+  const aiEndRef = useRef(null);
+  const saveAiCfg = (patch) => {
+    const next = { ...aiCfg, ...patch };
+    setAiCfg(next);
+    try { localStorage.setItem("flowbot_ai_builder", JSON.stringify(next)); } catch { /* private mode */ }
+  };
+  // ---- guided tour: auto-opens once for first-time visitors (desktop) ----
+  const [tourStep, setTourStep] = useState(null); // null = closed
+  useEffect(() => {
+    let done = "1";
+    try { done = localStorage.getItem("flowbot_tour_done"); } catch { /* private mode */ }
+    if (!isMobile && !done) {
+      const t = setTimeout(() => setTourStep(0), 900);
+      return () => clearTimeout(t);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const openTour = () => { setTab(0); setAiPanel(false); setShowPalette(false); setTourStep(0); };
+  const closeTour = () => {
+    setTourStep(null);
+    try { localStorage.setItem("flowbot_tour_done", "1"); } catch { /* private mode */ }
+  };
   const pendingAuth = useRef(null); // action to resume after a successful login
   const userRef = useRef(user);
   const canvasRef = useRef(null);
@@ -463,6 +497,49 @@ function Builder({ user, onAuthed, onLogout }) {
     setBotId(null); setActivated(false); setActivation(null); setDirty(true); setChat([]);
   };
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
+  useEffect(() => { aiEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs, aiBusy]);
+
+  /* ---------- AI Builder: describe → flowchart on canvas ---------- */
+  async function askAssistant() {
+    const text = aiInput.trim();
+    if (!text || aiBusy) return;
+    if (!aiCfg.apiKey.trim()) { flash("Add your AI provider API key in the panel first", true); return; }
+    const history = aiMsgs.slice(-8).map((m) => ({ role: m.side === "me" ? "user" : "assistant", content: m.text }));
+    setAiMsgs((m) => [...m, { side: "me", text }]);
+    setAiInput("");
+    setAiBusy(true);
+    try {
+      const r = await api.assistant({
+        ...aiCfg,
+        message: text,
+        history,
+        currentFlow: { nodes: nodes.map(({ id, type, config }) => ({ id, type, config })), edges },
+      });
+      if (r.flow?.nodes?.length) {
+        aiUndo.current = { nodes, edges };
+        setNodes(r.flow.nodes);
+        setEdges(r.flow.edges);
+        setSel(null);
+        setConnecting(null);
+        markDirty();
+        flash("✨ Flow updated by AI Builder — hit Save to keep it");
+      }
+      setAiMsgs((m) => [...m, { side: "bot", text: r.reply || "Done — your flow is on the canvas!" }]);
+    } catch (e) {
+      setAiMsgs((m) => [...m, { side: "bot", text: "⚠️ " + (e.message || "Generation failed — try again.") }]);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+  const undoAssistant = () => {
+    if (!aiUndo.current) return;
+    setNodes(aiUndo.current.nodes);
+    setEdges(aiUndo.current.edges);
+    aiUndo.current = null;
+    setSel(null);
+    markDirty();
+    flash("↩ Restored the flow from before the last AI edit");
+  };
 
   const flash = (msg, err = false) => { setToast({ msg, err }); setTimeout(() => setToast(null), 2400); };
   const refreshList = () => api.listFlows().then(setSavedFlows).catch(() => {});
@@ -794,7 +871,7 @@ function Builder({ user, onAuthed, onLogout }) {
           </div>
           <input style={{ ...S.input, width: isMobile ? 120 : 190 }} value={botName}
             onChange={(e) => { setBotName(e.target.value); markDirty(); }} placeholder="Bot name" />
-          <button style={S.ghostBtn} onClick={saveFlow} disabled={busy}>
+          <button data-tour="save" style={S.ghostBtn} onClick={saveFlow} disabled={busy}>
             {dirty ? "💾 Save*" : "✓ Saved"}
           </button>
           <select style={{ ...S.input, width: isMobile ? 130 : 160 }} value=""
@@ -814,9 +891,17 @@ function Builder({ user, onAuthed, onLogout }) {
           </select>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
-            <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
-          ))}
+          <button data-tour="ai-builder" style={{ ...S.primaryBtn, padding: "8px 14px", fontSize: 12.5 }} onClick={() => setAiPanel((v) => !v)}>
+            ✨ AI Builder
+          </button>
+          <div data-tour="tabs" style={{ display: "flex", gap: 6 }}>
+            {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
+              <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
+            ))}
+          </div>
+          {!isMobile && (
+            <button style={{ ...S.ghostBtn, padding: "8px 11px" }} title="Show the tutorial again" onClick={openTour}>❓</button>
+          )}
           {user ? (<>
             <span style={{ fontSize: 11.5, color: "#64748b", marginLeft: 8, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               title={user.email}>
@@ -830,6 +915,68 @@ function Builder({ user, onAuthed, onLogout }) {
       </div>
 
       {toast && <div style={{ ...S.toast, background: toast.err ? "#fef2f2" : "#ecfdf5", borderColor: toast.err ? "#ef4444" : "#059669", color: toast.err ? "#b91c1c" : "#0f766e" }}>{toast.msg}</div>}
+
+      {/* ============ GUIDED TOUR: first visit + ❓ button ============ */}
+      {tourStep !== null && <Tour step={tourStep} setStep={setTourStep} onClose={closeTour} />}
+
+      {/* ============ AI BUILDER: describe your bot → flowchart on canvas ============ */}
+      {aiPanel && (
+        <div style={S.aiPanel}>
+          <div style={S.aiHeader}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>✨ AI Builder</div>
+              <div style={{ fontSize: 10.5, color: "#d3ece4" }}>describe your bot — I'll draw the flowchart</div>
+            </div>
+            {aiUndo.current && (
+              <button style={{ ...S.miniBtn, marginLeft: "auto" }} onClick={undoAssistant} title="Restore the flow from before the last AI edit">↩ Undo</button>
+            )}
+            <button style={{ ...S.miniBtn, marginLeft: aiUndo.current ? 6 : "auto" }} onClick={() => setAiPanel(false)}>✕</button>
+          </div>
+          <div style={S.aiSettings}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <select style={{ ...S.input, flex: 1 }} value={aiCfg.provider}
+                onChange={(e) => {
+                  const provider = e.target.value;
+                  const models = { anthropic: "claude-sonnet-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
+                  saveAiCfg({ provider, model: models[provider] });
+                }}>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI / compatible</option>
+                <option value="gemini">Google Gemini</option>
+              </select>
+              <input style={{ ...S.input, flex: 1 }} value={aiCfg.model}
+                onChange={(e) => saveAiCfg({ model: e.target.value.trim() })} placeholder="model" />
+            </div>
+            <input style={S.input} type="password" value={aiCfg.apiKey} placeholder="your API key (saved only in this browser)"
+              onChange={(e) => saveAiCfg({ apiKey: e.target.value.trim() })} />
+          </div>
+          <div style={S.aiBody}>
+            {aiMsgs.length === 0 && (
+              <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.6, padding: "18px 6px", textAlign: "center" }}>
+                Try: <i>"A bot for my Italian restaurant in Pune — menu, table booking, opening hours and AI support"</i><br /><br />
+                I'll draw the whole flowchart on your canvas — and if a feature has no built-in
+                block, I'll invent a custom block for it. You can keep chatting to refine it.
+                Works in any language. Your API key stays in this browser only.
+              </div>
+            )}
+            {aiMsgs.map((m, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: m.side === "me" ? "flex-end" : "flex-start" }}>
+                <div style={{ ...S.bubble, ...(m.side === "me" ? S.aiBubbleMe : S.aiBubbleBot) }}>{m.text}</div>
+              </div>
+            ))}
+            {aiBusy && <div style={{ ...S.bubble, ...S.aiBubbleBot, opacity: 0.7 }}>🎨 Designing your flow…</div>}
+            <div ref={aiEndRef} />
+          </div>
+          <div style={S.aiInputRow}>
+            <input style={{ ...S.input, flex: 1, borderRadius: 20 }} value={aiInput}
+              placeholder={aiCfg.apiKey ? "Describe your bot or ask for changes…" : "Paste your API key above first"}
+              onChange={(e) => setAiInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && askAssistant()} />
+            <button style={{ ...S.primaryBtn, borderRadius: 20, padding: "8px 16px", opacity: aiBusy || !aiInput.trim() ? 0.5 : 1 }}
+              disabled={aiBusy || !aiInput.trim()} onClick={askAssistant}>➤</button>
+          </div>
+        </div>
+      )}
 
       {/* ============ AUTH MODAL: only when an action needs an account ============ */}
       {authOpen && (
@@ -888,7 +1035,7 @@ function Builder({ user, onAuthed, onLogout }) {
       {tab === 0 && (
         <div style={S.designWrap}>
           {isMobile && showPalette && <div style={S.drawerBackdrop} onClick={() => setShowPalette(false)} />}
-          <div style={isMobile ? { ...S.palette, ...S.paletteDrawer, ...(showPalette ? {} : { display: "none" }) } : S.palette}>
+          <div data-tour="palette" style={isMobile ? { ...S.palette, ...S.paletteDrawer, ...(showPalette ? {} : { display: "none" }) } : S.palette}>
             {isMobile && (
               <button style={{ ...S.ghostBtn, width: "100%", marginBottom: 10 }} onClick={() => setShowPalette(false)}>✕ Close blocks</button>
             )}
@@ -935,7 +1082,7 @@ function Builder({ user, onAuthed, onLogout }) {
             </div>
           </div>
 
-          <div ref={canvasRef} style={{ ...S.canvas, cursor: connecting ? "crosshair" : "default" }}
+          <div ref={canvasRef} data-tour="canvas" style={{ ...S.canvas, cursor: connecting ? "crosshair" : "default" }}
             onClick={() => {
               if (suppressCanvasClick.current) { suppressCanvasClick.current = false; return; }
               setSel(null); setConnecting(null);
@@ -1045,7 +1192,7 @@ function Builder({ user, onAuthed, onLogout }) {
             )}
           </div>
 
-          <div style={isMobile ? { ...S.inspector, ...S.inspectorSheet, ...(selNode ? {} : { display: "none" }) } : S.inspector}>
+          <div data-tour="inspector" style={isMobile ? { ...S.inspector, ...S.inspectorSheet, ...(selNode ? {} : { display: "none" }) } : S.inspector}>
             {isMobile && selNode && (
               <button style={{ ...S.ghostBtn, width: "100%", marginBottom: 10 }} onClick={() => setSel(null)}>✓ Done</button>
             )}
@@ -1528,6 +1675,41 @@ function StepsEditor({ steps, onChange }) {
             <input style={S.input} value={s.errorMessage || ""} placeholder="message if the request fails"
               onChange={(e) => patch(i, { errorMessage: e.target.value })} />
           </>)}
+          {s.kind === "ai" && (<>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <select style={{ ...S.input, width: 150 }} value={s.provider || "anthropic"}
+                onChange={(e) => {
+                  const provider = e.target.value;
+                  const models = { anthropic: "claude-haiku-4-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
+                  patch(i, { provider, model: models[provider] || "" });
+                }}>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI / compatible</option>
+                <option value="gemini">Google Gemini</option>
+              </select>
+              <input style={{ ...S.input, flex: 1 }} value={s.model || ""} placeholder="model"
+                onChange={(e) => patch(i, { model: e.target.value.trim() })} />
+            </div>
+            <input style={{ ...S.input, marginBottom: 6 }} type="password" value={s.apiKey || ""}
+              placeholder="your provider API key (used server-side only)"
+              onChange={(e) => patch(i, { apiKey: e.target.value.trim() })} />
+            {(s.provider || "anthropic") === "openai" && (
+              <input style={{ ...S.input, marginBottom: 6 }} value={s.baseUrl || ""}
+                placeholder="base URL (optional — Groq, OpenRouter…)"
+                onChange={(e) => patch(i, { baseUrl: e.target.value.trim() })} />
+            )}
+            <textarea style={{ ...S.textarea, marginBottom: 6 }} rows={3} value={s.context || ""}
+              placeholder="Business context — the AI's instructions"
+              onChange={(e) => patch(i, { context: e.target.value })} />
+            <input style={{ ...S.input, marginBottom: 6 }} value={s.greeting || ""}
+              placeholder="greeting when AI chat starts"
+              onChange={(e) => patch(i, { greeting: e.target.value })} />
+            <input style={S.input} value={s.errorMessage || ""} placeholder="message if the AI can't reply"
+              onChange={(e) => patch(i, { errorMessage: e.target.value })} />
+            <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 4 }}>
+              Customer chats with the AI until they type 0 — then the next step runs.
+            </div>
+          </>)}
           {s.kind === "choice" && (<>
             <input style={{ ...S.input, marginBottom: 6 }} value={s.prompt} placeholder="Prompt"
               onChange={(e) => patch(i, { prompt: e.target.value })} />
@@ -1557,6 +1739,85 @@ function StepsEditor({ steps, onChange }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ---------- guided tour for first-time visitors ---------- */
+const TOUR_STEPS = [
+  { target: null, title: "👋 Welcome to FlowBot!", body: "Build a real WhatsApp bot by drawing a flowchart — no code needed. This 60-second tour shows you everything." },
+  { target: "palette", title: "🧱 Feature blocks", body: "40 ready-made blocks — menus, FAQs, bookings, payments, API calls, even AI chat. Click any block to drop it on the canvas. You can also invent your own in the Block Lab." },
+  { target: "canvas", title: "🎨 The canvas — your bot", body: "This flowchart IS your bot. Drag blocks by their colored header. To connect two blocks, drag from a block's right dot onto the next block. Click a wire to delete it." },
+  { target: "inspector", title: "⚙️ Block settings", body: "Click any block on the canvas and edit its texts, options and behavior here. Use {variables} like {name} to personalize messages." },
+  { target: "ai-builder", title: "✨ Or just describe it — AI Builder", body: "Type what you want — \"a bot for my restaurant with menu and table booking\" — in any language, and the whole flowchart appears on your canvas. Uses your own AI key." },
+  { target: "save", title: "💾 Save your bot", body: "Saving needs a free account and keeps your bot on the server — ready for the simulator and for going live." },
+  { target: "tabs", title: "🚀 Code, test & go live", body: "Tab 2 shows your bot's complete source code (download as ZIP — it's yours). Tab 3 has a WhatsApp-style simulator and one-click activation on Meta, Twilio, Green API or Whapi." },
+  { target: null, title: "🎉 You're ready!", body: "Pro tip: pick a ready-made bot from \"Start from template…\" and customize it. Reopen this tour anytime with the ❓ button in the header." },
+];
+
+function Tour({ step, setStep, onClose }) {
+  const s = TOUR_STEPS[step];
+  const [rect, setRect] = useState(null);
+  useEffect(() => {
+    const measure = () => {
+      if (!s.target) return setRect(null);
+      const el = document.querySelector(`[data-tour="${s.target}"]`);
+      if (!el) return setRect(null);
+      const r = el.getBoundingClientRect();
+      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [step, s.target]);
+
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const W = 320, H = 240;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let cardStyle;
+  if (!rect) {
+    cardStyle = { top: "50%", left: "50%", transform: "translate(-50%,-50%)" };
+  } else if (rect.left + rect.width + W + 28 < vw) {
+    cardStyle = { top: clamp(rect.top, 12, vh - H), left: rect.left + rect.width + 14 };
+  } else if (rect.left - W - 28 > 0) {
+    cardStyle = { top: clamp(rect.top, 12, vh - H), left: rect.left - W - 14 };
+  } else {
+    const below = rect.top + rect.height + 14;
+    cardStyle = { top: below + H < vh ? below : Math.max(12, rect.top - H - 14), left: clamp(rect.left, 12, vw - W - 12) };
+  }
+
+  return (
+    <>
+      {rect ? (
+        <div style={{
+          position: "fixed", zIndex: 94, pointerEvents: "none",
+          top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12,
+          border: "2.5px solid #25D366", borderRadius: 12,
+          boxShadow: "0 0 0 9999px rgba(15,23,42,.55)",
+        }} />
+      ) : (
+        <div style={{ position: "fixed", inset: 0, zIndex: 94, background: "rgba(15,23,42,.55)" }} onClick={onClose} />
+      )}
+      <div style={{
+        position: "fixed", zIndex: 95, width: W, background: "#ffffff", borderRadius: 14,
+        padding: 16, boxShadow: "0 20px 50px rgba(15,23,42,.35)", border: "1px solid #e2e8f0", ...cardStyle,
+      }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>{s.title}</div>
+        <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.6, marginBottom: 12 }}>{s.body}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", gap: 4, marginRight: "auto" }}>
+            {TOUR_STEPS.map((_, i) => (
+              <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: i === step ? "#25D366" : "#dbe3ee" }} />
+            ))}
+          </div>
+          <button style={styles.miniBtn} onClick={onClose}>Skip</button>
+          {step > 0 && <button style={styles.miniBtn} onClick={() => setStep(step - 1)}>← Back</button>}
+          <button style={{ ...styles.primaryBtn, padding: "6px 14px", fontSize: 12 }}
+            onClick={() => (step + 1 < TOUR_STEPS.length ? setStep(step + 1) : onClose())}>
+            {step + 1 < TOUR_STEPS.length ? "Next →" : "Let's build! 🚀"}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1729,4 +1990,13 @@ const styles = {
   bubbleBot: { background: "#ffffff", border: "1px solid #e5decf", borderTopLeftRadius: 3 },
   bubbleMe: { background: "#d9fdd3", color: "#0b3d2c", borderTopRightRadius: 3 },
   phoneInput: { display: "flex", gap: 8, padding: 10, borderTop: "1px solid #e2e8f0", background: "#f8fafc" },
+
+  /* AI Builder side panel */
+  aiPanel: { position: "fixed", top: 0, right: 0, bottom: 0, width: "min(370px, 100vw)", zIndex: 85, display: "flex", flexDirection: "column", background: "#ffffff", borderLeft: "1px solid #e2e8f0", boxShadow: "-12px 0 40px rgba(15,23,42,.18)" },
+  aiHeader: { display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#ffffff" },
+  aiSettings: { padding: "10px 12px", borderBottom: "1px solid #e2e8f0", background: "#faf5ff" },
+  aiBody: { flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 7, background: "#f8fafc" },
+  aiBubbleMe: { background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#ffffff", borderTopRightRadius: 3 },
+  aiBubbleBot: { background: "#ffffff", border: "1px solid #e2e8f0", borderTopLeftRadius: 3, color: "#334155" },
+  aiInputRow: { display: "flex", gap: 8, padding: 10, borderTop: "1px solid #e2e8f0", background: "#ffffff" },
 };
