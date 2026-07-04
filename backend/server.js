@@ -43,7 +43,7 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 const NODE_LIMIT = 150;
-const STEP_KINDS = new Set(["say", "ask", "set", "choice"]);
+const STEP_KINDS = new Set(["say", "ask", "set", "api", "choice"]);
 const STEP_LIMIT = 30;
 
 // steps power user-made custom blocks — validate their shape wherever they arrive
@@ -52,9 +52,10 @@ const validateSteps = (steps) => {
   if (steps.length > STEP_LIMIT) return `a custom block can have at most ${STEP_LIMIT} steps`;
   for (const s of steps) {
     if (!s || typeof s !== "object" || Array.isArray(s)) return "every step must be an object";
-    if (!STEP_KINDS.has(s.kind)) return "step kind must be say, ask, set or choice";
+    if (!STEP_KINDS.has(s.kind)) return "step kind must be say, ask, set, api or choice";
     if (s.kind === "choice" && (!Array.isArray(s.options) || !s.options.length || s.options.length > 8))
       return "a choice step needs 1-8 options";
+    if (s.kind === "api" && typeof s.url !== "string") return "an api step needs a url";
   }
   return null;
 };
@@ -258,7 +259,7 @@ app.post("/api/flows/:id/simulate", wrap(async (req, res) => {
   const key = `${f.id}|${from}`;
   if (req.body.reset) sessions.delete(key);
   if (req.body.message === undefined) return res.json({ replies: [] });
-  const replies = handleMessage(f, req.body.message, getSession(key));
+  const replies = await handleMessage(f, req.body.message, getSession(key));
   res.json({ replies });
 }));
 
@@ -290,7 +291,7 @@ app.post("/whatsapp/:id", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
   if (!f || !f.active || f.provider !== "twilio") return res.type("text/xml").send(twiml(["This bot is not active."]));
   const from = req.body.From || "unknown";
-  const replies = handleMessage(f, req.body.Body || "", getSession(`${f.id}|${from}`));
+  const replies = await handleMessage(f, req.body.Body || "", getSession(`${f.id}|${from}`));
   res.type("text/xml").send(twiml(replies));
 }));
 
@@ -313,7 +314,7 @@ app.post("/meta/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "meta" || !f.meta) return res.sendStatus(200); // always 200 so Meta doesn't retry forever
   const incoming = metaApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200); // delivery/read status events — nothing to do
-  const replies = handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
+  const replies = await handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
   for (const msg of replies) {
     try {
       await metaApi.sendText(f.meta, incoming.from, msg);
@@ -331,7 +332,7 @@ app.post("/green/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "green" || !f.green) return res.sendStatus(200);
   const incoming = greenApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
-  const replies = handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
+  const replies = await handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
   for (const msg of replies) {
     try {
       await greenApi.sendText(f.green, incoming.from, msg);
@@ -349,7 +350,7 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "whapi" || !f.whapi) return res.sendStatus(200);
   const incoming = whapi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
-  const replies = handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
+  const replies = await handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
   for (const msg of replies) {
     try {
       await whapi.sendText(f.whapi, incoming.from, msg);

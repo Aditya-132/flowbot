@@ -190,6 +190,21 @@ const NODE_TYPES = {
     desc: "Creates an internal note in session variables.",
     defaults: () => ({ field: "note", note: "Customer asked about pricing.", message: "Note saved." }),
   },
+  http_request: {
+    label: "HTTP Request / API", icon: "🌐", color: "#6366F1",
+    desc: "Calls any external API (GET/POST/PUT/PATCH/DELETE) mid-flow and saves the response into a variable. Branches on success/error.",
+    defaults: () => ({
+      method: "GET",
+      url: "https://api.example.com/orders/{orderId}",
+      headers: [],
+      body: "",
+      saveAs: "apiResult",
+      jsonPath: "",
+      successMessage: "",
+      errorMessage: "Sorry, I couldn't reach the service right now. Please try again later.",
+    }),
+    outputs: () => 2,
+  },
   payment_link: {
     label: "Payment Link", icon: "💳", color: "#10B981",
     desc: "Shares checkout or payment URL.",
@@ -237,6 +252,7 @@ const branchLabels = {
   condition: ["true", "false"],
   business_hours: ["open", "closed"],
   product_search: ["found", "not found"],
+  http_request: ["success", "error"],
   csat: ["1", "2", "3", "4", "5"],
 };
 
@@ -245,19 +261,22 @@ const STEP_KINDS = {
   say: { label: "Send message", icon: "💬" },
   ask: { label: "Ask & save answer", icon: "❓" },
   set: { label: "Set variable", icon: "🧩" },
+  api: { label: "Call an API (HTTP)", icon: "🌐" },
   choice: { label: "Choices (branches)", icon: "🔀" },
 };
 const stepDefaults = {
   say: () => ({ kind: "say", message: "Here is some information." }),
   ask: () => ({ kind: "ask", question: "What's your answer?", field: "answer", validate: "text", ack: "" }),
   set: () => ({ kind: "set", field: "source", value: "whatsapp" }),
+  api: () => ({ kind: "api", method: "GET", url: "", headers: [], body: "", field: "apiResult", jsonPath: "", errorMessage: "Sorry, I couldn't fetch that right now." }),
   choice: () => ({ kind: "choice", prompt: "Pick one:", options: ["Option A", "Option B"] }),
 };
 const stepSummary = (s) =>
   s.kind === "say" ? s.message
     : s.kind === "ask" ? `${s.question} → {${s.field || "value"}}`
       : s.kind === "set" ? `{${s.field}} = ${s.value}`
-        : `${s.prompt} · ${(s.options || []).length} branches`;
+        : s.kind === "api" ? `${s.method || "GET"} ${s.url || ""} → {${s.field || "apiResult"}}`
+          : `${s.prompt} · ${(s.options || []).length} branches`;
 const customSteps = (n) => (Array.isArray(n.config?.steps) ? n.config.steps : []);
 const lastChoice = (n) => {
   const steps = customSteps(n);
@@ -285,6 +304,7 @@ const listRows = (n) => {
   if (n.type === "catalog" || n.type === "product_search") return n.config.items?.length || 0;
   if (n.type === "csat") return 5;
   if (n.type === "custom") return Math.min(customSteps(n).length, 8);
+  if (branchLabels[n.type]) return branchLabels[n.type].length;
   return 0;
 };
 const nodeH = (n) => Math.max(90, 66 + listRows(n) * 26 + 12);
@@ -334,6 +354,7 @@ const nodeSummary = (n) => {
   if (n.type === "product_search") return `${c.question} · ${(c.items || []).length} searchable items`;
   if (n.type === "business_hours") return `${c.startHour}:00-${c.endHour}:00`;
   if (n.type === "condition") return `{${c.field}} ${c.operator || "equals"} ${c.value}`;
+  if (n.type === "http_request") return `${c.method || "GET"} ${c.url || ""} → {${c.saveAs || "apiResult"}}`;
   if (n.type === "custom") return `${customSteps(n).length} step${customSteps(n).length === 1 ? "" : "s"}`;
   return c.message || c.question || c.caption || c.url || c.note || NODE_TYPES[n.type]?.desc || "";
 };
@@ -884,7 +905,7 @@ function Builder({ user, onAuthed, onLogout }) {
 
             <div style={{ ...S.paneTitle, marginTop: 14 }}>Feature blocks</div>
             <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>
-              38 deterministic WhatsApp blocks backed by pre-written server handlers.
+              39 deterministic WhatsApp blocks backed by pre-written server handlers.
             </div>
             {Object.entries(NODE_TYPES).map(([k, t]) => (
               <button key={k} onClick={() => { addNode(k); if (isMobile) setShowPalette(false); }} style={S.paletteItem}>
@@ -1095,7 +1116,52 @@ function Builder({ user, onAuthed, onLogout }) {
                   </Field>
                 )}
 
-                {!["welcome", "goodbye", "collect", "faq", "custom"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
+                {selNode.type === "http_request" && (<>
+                  <Field label="Method">
+                    <select style={S.input} value={selNode.config.method || "GET"}
+                      onChange={(e) => updateConfig(selNode.id, { method: e.target.value })}>
+                      {["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="URL ({vars} allowed)">
+                    <input style={S.input} value={selNode.config.url || ""} placeholder="https://api.example.com/orders/{orderId}"
+                      onChange={(e) => updateConfig(selNode.id, { url: e.target.value })} />
+                  </Field>
+                  <Field label="Headers">
+                    <HeadersEditor value={Array.isArray(selNode.config.headers) ? selNode.config.headers : []}
+                      onChange={(headers) => updateConfig(selNode.id, { headers })} />
+                  </Field>
+                  {(selNode.config.method || "GET") !== "GET" && (
+                    <Field label="Body — JSON, {vars} allowed">
+                      <textarea style={S.textarea} rows={4} value={selNode.config.body || ""}
+                        placeholder={'{"name": "{name}", "phone": "{phone}"}'}
+                        onChange={(e) => updateConfig(selNode.id, { body: e.target.value })} />
+                    </Field>
+                  )}
+                  <Field label="Save response as variable">
+                    <input style={S.input} value={selNode.config.saveAs || ""}
+                      onChange={(e) => updateConfig(selNode.id, { saveAs: e.target.value.replace(/\W/g, "") })} />
+                  </Field>
+                  <Field label="JSON path (optional)">
+                    <input style={S.input} value={selNode.config.jsonPath || ""} placeholder="e.g. data.0.status"
+                      onChange={(e) => updateConfig(selNode.id, { jsonPath: e.target.value })} />
+                  </Field>
+                  <Field label="Success message (optional)">
+                    <textarea style={S.textarea} rows={2} value={selNode.config.successMessage || ""}
+                      placeholder={"e.g. Your order is {" + (selNode.config.saveAs || "apiResult") + "}"}
+                      onChange={(e) => updateConfig(selNode.id, { successMessage: e.target.value })} />
+                  </Field>
+                  <Field label="Error message">
+                    <textarea style={S.textarea} rows={2} value={selNode.config.errorMessage || ""}
+                      onChange={(e) => updateConfig(selNode.id, { errorMessage: e.target.value })} />
+                  </Field>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                    Response is saved as {"{" + (selNode.config.saveAs || "apiResult") + "}"} — use it in any later block.
+                    Wire dot 1 (success) and dot 2 (error) to different branches.
+                  </div>
+                </>)}
+
+                {!["welcome", "goodbye", "collect", "faq", "custom", "http_request"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
                   <GenericConfig node={selNode} updateConfig={updateConfig} />
                 )}
 
@@ -1375,6 +1441,31 @@ function StepsEditor({ steps, onChange }) {
                 onChange={(e) => patch(i, { value: e.target.value })} />
             </div>
           )}
+          {s.kind === "api" && (<>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <select style={{ ...S.input, width: 92 }} value={s.method || "GET"}
+                onChange={(e) => patch(i, { method: e.target.value })}>
+                {["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <input style={{ ...S.input, flex: 1 }} value={s.url || ""} placeholder="https://api.example.com/{var}"
+                onChange={(e) => patch(i, { url: e.target.value })} />
+            </div>
+            <HeadersEditor value={Array.isArray(s.headers) ? s.headers : []}
+              onChange={(headers) => patch(i, { headers })} />
+            {(s.method || "GET") !== "GET" && (
+              <textarea style={{ ...S.textarea, marginTop: 6 }} rows={2} value={s.body || ""}
+                placeholder={'Body (JSON, {vars} ok) — {"name": "{name}"}'}
+                onChange={(e) => patch(i, { body: e.target.value })} />
+            )}
+            <div style={{ display: "flex", gap: 6, marginTop: 6, marginBottom: 6 }}>
+              <input style={{ ...S.input, flex: 1 }} value={s.field || ""} placeholder="save response as variable"
+                onChange={(e) => patch(i, { field: e.target.value.replace(/\W/g, "") })} />
+              <input style={{ ...S.input, flex: 1 }} value={s.jsonPath || ""} placeholder="JSON path (optional)"
+                onChange={(e) => patch(i, { jsonPath: e.target.value })} />
+            </div>
+            <input style={S.input} value={s.errorMessage || ""} placeholder="message if the request fails"
+              onChange={(e) => patch(i, { errorMessage: e.target.value })} />
+          </>)}
           {s.kind === "choice" && (<>
             <input style={{ ...S.input, marginBottom: 6 }} value={s.prompt} placeholder="Prompt"
               onChange={(e) => patch(i, { prompt: e.target.value })} />
@@ -1408,6 +1499,23 @@ function StepsEditor({ steps, onChange }) {
 }
 
 /* ---------- small components ---------- */
+// key/value pairs for the HTTP Request block + api steps ({vars} allowed in values)
+function HeadersEditor({ value, onChange }) {
+  return (
+    <div>
+      {value.map((h, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          <input style={{ ...styles.input, flex: 1 }} placeholder="Header" value={h.key || ""}
+            onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
+          <input style={{ ...styles.input, flex: 1 }} placeholder="Value — {vars} ok" value={h.value || ""}
+            onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
+          <button style={styles.miniBtn} title="Remove header" onClick={() => onChange(value.filter((_, j) => j !== i))}>✕</button>
+        </div>
+      ))}
+      <button style={styles.addBtn} onClick={() => onChange([...value, { key: "", value: "" }])}>+ Add header</button>
+    </div>
+  );
+}
 function Trunc({ text }) {
   return <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.4 }}>{text.length > 62 ? text.slice(0, 62) + "…" : text}</div>;
 }

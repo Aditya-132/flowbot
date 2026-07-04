@@ -54,11 +54,11 @@ const twiml = (msgs) =>
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 
-app.post("/whatsapp", (req, res) => {
+app.post("/whatsapp", async (req, res) => {
   const from = req.body.From || "unknown";
   const body = req.body.Body || "";
   const s = sessions[from] || (sessions[from] = { state: null, vars: {} });
-  res.type("text/xml").send(twiml(handleMessage(FLOW, body, s)));
+  res.type("text/xml").send(twiml(await handleMessage(FLOW, body, s)));
 });
 
 app.get("/", (_req, res) => res.send("${title(flow)} is running. Webhook: POST /whatsapp"));
@@ -115,7 +115,7 @@ app.post("/webhook", async (req, res) => {
     const from = msg.from;
     const text = msg.text?.body ?? msg.interactive?.button_reply?.title ?? msg.interactive?.list_reply?.title ?? msg.button?.text ?? "";
     const s = sessions[from] || (sessions[from] = { state: null, vars: {} });
-    for (const reply of handleMessage(FLOW, text, s)) await sendText(from, reply);
+    for (const reply of await handleMessage(FLOW, text, s)) await sendText(from, reply);
   }
   res.sendStatus(200);
 });
@@ -177,7 +177,7 @@ app.post("/webhook", async (req, res) => {
   const incoming = extractIncoming(req.body);
   if (incoming) {
     const s = sessions[incoming.from] || (sessions[incoming.from] = { state: null, vars: {} });
-    for (const reply of handleMessage(FLOW, incoming.text, s)) await sendText(incoming.from, reply);
+    for (const reply of await handleMessage(FLOW, incoming.text, s)) await sendText(incoming.from, reply);
   }
   res.sendStatus(200);
 });
@@ -245,7 +245,7 @@ app.post("/webhook", async (req, res) => {
   const incoming = extractIncoming(req.body);
   if (incoming) {
     const s = sessions[incoming.from] || (sessions[incoming.from] = { state: null, vars: {} });
-    for (const reply of handleMessage(FLOW, incoming.text, s)) await sendText(incoming.from, reply);
+    for (const reply of await handleMessage(FLOW, incoming.text, s)) await sendText(incoming.from, reply);
   }
   res.sendStatus(200);
 });

@@ -54,7 +54,7 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
           </div>
         )}
         <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.55 }}>
-          38+ ready blocks, hotel/restaurant/bank/store templates, a Block Lab to invent your own
+          39+ ready blocks, hotel/restaurant/bank/store templates, a Block Lab to invent your own
           blocks, a live simulator — go live on Meta, Twilio, Green API or Whapi, or export your
           bot's full code as a ZIP.
         </p>

@@ -6,7 +6,8 @@ flowchart in the browser and FlowBot turns it into a working WhatsApp bot —
 
 🌐 **Live: [flochatbot.com](https://flochatbot.com)**
 
-✨ Highlights: 38+ ready feature blocks · 🧪 **Block Lab** to invent your own blocks from steps ·
+✨ Highlights: 39+ ready feature blocks · 🌐 **HTTP Request block** (full CRUD against any API) ·
+🧪 **Block Lab** to invent your own blocks from steps ·
 🏨 rich templates (Hotel Paradise Hyderabad — 77 blocks, restaurant, bank, chess academy, online
 store) · 💬 live chat simulator · 🔐 multi-user accounts with per-user bots · 🚀 one-click
 activation on **Meta WhatsApp Cloud API, Twilio, Green API or Whapi.cloud** · 📦 export your
@@ -26,9 +27,9 @@ bot's **complete Node.js code as a ZIP**.
                                  └──────────────┘
 ```
 
-## The 38 pre-embedded features (+ your own via Block Lab)
+## The 39 pre-embedded features (+ your own via Block Lab)
 
-FlowBot now includes the original conversation blocks plus 30 more practical
+FlowBot now includes the original conversation blocks plus 30+ more practical
 WhatsApp automation blocks inspired by common ecommerce/support workflows:
 
 | Family | Blocks |
@@ -40,8 +41,9 @@ WhatsApp automation blocks inspired by common ecommerce/support workflows:
 | Booking/support | Appointment, Booking Confirm, Business Hours, Human Handoff |
 | Feedback | CSAT Rating, Feedback, Review Request |
 | Routing/logic | Language Router, Condition, Set Variable, Tag Customer, Save Note |
+| 🌐 Integrations | HTTP Request / API — GET/POST/PUT/PATCH/DELETE with headers, `{var}` templating in URL/body, JSON-path response extraction, success/error branches |
 | Info & inputs | Collect Number (validated), Location/Map, Contact Card |
-| 🧪 Block Lab | Build your own blocks from steps: say / ask (validated) / set variable / choices |
+| 🧪 Block Lab | Build your own blocks from steps: say / ask (validated) / set variable / call an API / choices |
 | Media/utilities | Send Link, Image / Media Link |
 
 Each block maps to a fixed handler in `backend/engine.js`. Generating a bot is just:

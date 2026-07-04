@@ -19,6 +19,57 @@ const collectConfig = {
   feedback: { fixedField: "feedback", question: "question", ack: "Thanks for the feedback." },
 };
 
+/* ---------- HTTP Request (GET/POST/PUT/PATCH/DELETE) ----------
+   Calls an external API mid-flow with {vars} interpolated into the URL,
+   headers and body, then stores the response (optionally narrowed by a
+   dot json-path) in a session variable. Used by the http_request block
+   and the "api" step kind inside user-made custom blocks.
+   Private/loopback hosts are blocked unless FLOWBOT_ALLOW_PRIVATE_URLS
+   is set (exported bots calling their own local APIs can opt in). */
+
+const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+const PRIVATE_HOST = /^(localhost$|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0$|\[?::1\]?$|172\.(1[6-9]|2\d|3[01])\.)/i;
+
+function jsonPathPick(obj, path) {
+  return String(path).split(".").filter(Boolean).reduce((a, k) => (a == null ? undefined : a[k]), obj);
+}
+
+async function httpRequest(c, vars) {
+  const method = HTTP_METHODS.has(String(c.method || "").toUpperCase()) ? String(c.method).toUpperCase() : "GET";
+  const url = interp(c.url || "", vars);
+  if (!/^https?:\/\//i.test(url)) return { ok: false, error: "URL must start with http(s)://" };
+  let host;
+  try { host = new URL(url).hostname; } catch { return { ok: false, error: "invalid URL" }; }
+  if (PRIVATE_HOST.test(host) && !process.env.FLOWBOT_ALLOW_PRIVATE_URLS)
+    return { ok: false, error: "private addresses are blocked" };
+  const headers = {};
+  for (const h of Array.isArray(c.headers) ? c.headers : []) {
+    if (h && h.key) headers[interp(h.key, vars)] = interp(h.value ?? "", vars);
+  }
+  const body = method !== "GET" && c.body ? interp(c.body, vars) : undefined;
+  if (body && !Object.keys(headers).some((k) => k.toLowerCase() === "content-type"))
+    headers["Content-Type"] = "application/json";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const res = await fetch(url, { method, headers, body, signal: ctrl.signal });
+    const text = (await res.text()).slice(0, 65536);
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    let value = text;
+    try {
+      const parsed = JSON.parse(text);
+      const picked = c.jsonPath ? jsonPathPick(parsed, c.jsonPath) : parsed;
+      value = picked === undefined ? "" : typeof picked === "object" ? JSON.stringify(picked) : String(picked);
+    } catch { /* not JSON — keep the raw text */ }
+    // WhatsApp message bodies cap out near 4096 chars — keep stored values safe to echo
+    return { ok: true, value: String(value).slice(0, 3500) };
+  } catch (e) {
+    return { ok: false, error: e.name === "AbortError" ? "timeout" : "network error" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function firstEdge(flow, id, port) {
   return flow.edges.find((x) => x.from === id && x.fromPort === port);
 }
@@ -37,7 +88,7 @@ function fieldName(node) {
 /* ---------- auto-collect for missing variables ----------
    If a block is about to show a {var} nobody collected yet, the bot
    first asks for it, saves the answer, then re-runs the block. */
-const SCAN_KEYS = ["message", "prompt", "question", "caption", "title", "openMessage", "closedMessage", "trueMessage", "falseMessage", "url", "code", "note", "value"];
+const SCAN_KEYS = ["message", "prompt", "question", "caption", "title", "openMessage", "closedMessage", "trueMessage", "falseMessage", "url", "code", "note", "value", "body"];
 
 const prettyVar = (k) =>
   String(k).replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
@@ -52,6 +103,9 @@ function missingVar(node, vars) {
   if (node.type === "csat") own.add(c.field || "rating");
   if (node.type === "set_variable") own.add(c.field || "value");
   if (node.type === "save_note") own.add(c.field || "note");
+  if (node.type === "http_request") {
+    own.add(c.saveAs || "apiResult").add((c.saveAs || "apiResult") + "_error");
+  }
   if (menuTypes.has(node.type)) {
     own.add("choice").add(`${node.type}_choice`);
     if (node.type === "language") own.add("language");
@@ -77,10 +131,11 @@ function missingVar(node, vars) {
      { kind: "say",    message }
      { kind: "set",    field, value }
      { kind: "ask",    question, field, validate: text|number|email|phone, ack? }
+     { kind: "api",    method, url, headers[], body, field, jsonPath, errorMessage }
      { kind: "choice", prompt, options[] }  → branches to output port = option index
    Steps run in order; ask/choice pause for the user's reply. */
 
-function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn) {
+async function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn) {
   const steps = (node.config && Array.isArray(node.config.steps) ? node.config.steps : []);
   for (let i = startIdx; i < steps.length; i++) {
     const s = steps[i] || {};
@@ -88,6 +143,16 @@ function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn) 
       out.push(interpFn(s.message, session.vars));
     } else if (s.kind === "set") {
       session.vars[s.field || "value"] = interpFn(s.value || "", session.vars);
+    } else if (s.kind === "api") {
+      const r = await httpRequest(s, session.vars);
+      const field = s.field || "apiResult";
+      if (r.ok) {
+        session.vars[field] = r.value;
+        if (s.successMessage) out.push(interpFn(s.successMessage, session.vars));
+      } else {
+        session.vars[field + "_error"] = r.error;
+        out.push(interpFn(s.errorMessage || "Sorry, I couldn't fetch that right now.", session.vars));
+      }
     } else if (s.kind === "ask") {
       out.push(interpFn(s.question || "Please share:", session.vars));
       session.state = `step|${node.id}|${i}`;
@@ -149,32 +214,33 @@ function isOpenNow(c) {
 
 /**
  * Handle one incoming message against a flow.
+ * Async because http_request blocks / api steps call external APIs mid-flow.
  * @param {object} flow     {nodes:[{id,type,config}], edges:[{from,fromPort,to}]}
  * @param {string} text     incoming message body
  * @param {object} session  mutable {state, vars}
- * @returns {string[]}      bot replies
+ * @returns {Promise<string[]>}  bot replies
  */
-function handleMessage(flow, text, session) {
+async function handleMessage(flow, text, session) {
   // drop empty strings so optional messages (blank condition/hours text) never
   // reach the provider — WhatsApp APIs reject empty bodies
-  const replies = processMessage(flow, text, session).map((r) => String(r ?? "").trim()).filter(Boolean);
+  const replies = (await processMessage(flow, text, session)).map((r) => String(r ?? "").trim()).filter(Boolean);
   // never leave the customer on silence when a branch dead-ends
   if (!replies.length) replies.push("✅ That's all for now. Send any message to start over.");
   return replies;
 }
 
-function processMessage(flow, text, session) {
+async function processMessage(flow, text, session) {
   const out = [];
   const byId = Object.fromEntries(flow.nodes.map((n) => [n.id, n]));
   const next = (id, port) => getNext(flow, byId, id, port);
 
-  function continueOrEnd(node, port = 0) {
+  async function continueOrEnd(node, port = 0) {
     const nx = next(node.id, port);
-    if (nx) runFrom(nx);
+    if (nx) await runFrom(nx);
     else session.state = null;
   }
 
-  function runFrom(node) {
+  async function runFrom(node) {
     let cur = node;
     let guard = 0;
     while (cur && guard++ < 80) {
@@ -325,8 +391,23 @@ function processMessage(flow, text, session) {
           cur = next(cur.id, 0);
           break;
 
+        case "http_request": {
+          const r = await httpRequest(c, session.vars);
+          const field = c.saveAs || "apiResult";
+          if (r.ok) {
+            session.vars[field] = r.value;
+            if (c.successMessage) out.push(interp(c.successMessage, session.vars));
+            cur = next(cur.id, 0);
+          } else {
+            session.vars[field + "_error"] = r.error;
+            out.push(interp(c.errorMessage ?? "Sorry, I couldn't reach the service right now. Please try again later.", session.vars));
+            cur = next(cur.id, 1);
+          }
+          break;
+        }
+
         case "custom": {
-          const waiting = runCustomSteps(cur, session, out, 0, interp, optionPrompt);
+          const waiting = await runCustomSteps(cur, session, out, 0, interp, optionPrompt);
           if (waiting) return;
           cur = next(cur.id, 0);
           break;
@@ -353,7 +434,7 @@ function processMessage(flow, text, session) {
       out.push("This bot has no Welcome block configured yet.");
       return out;
     }
-    runFrom(start);
+    await runFrom(start);
     return out;
   }
 
@@ -382,8 +463,8 @@ function processMessage(flow, text, session) {
       session.state = null;
       session.vars[s.field || "value"] = result.value;
       if (s.ack) out.push(interp(s.ack, session.vars));
-      const waiting = runCustomSteps(node, session, out, idx + 1, interp, optionPrompt);
-      if (!waiting) continueOrEnd(node, 0);
+      const waiting = await runCustomSteps(node, session, out, idx + 1, interp, optionPrompt);
+      if (!waiting) await continueOrEnd(node, 0);
       return out;
     }
     // choice step: same matching rules as menus, then branch to that port
@@ -400,7 +481,7 @@ function processMessage(flow, text, session) {
       session.state = null;
       session.vars.choice = options[idx2];
       if (s.field) session.vars[s.field] = options[idx2];
-      continueOrEnd(node, idx2);
+      await continueOrEnd(node, idx2);
     } else {
       out.push(`Sorry, I didn't catch that.\n\n${optionPrompt({ prompt: s.prompt, options }, session.vars)}`);
     }
@@ -419,7 +500,7 @@ function processMessage(flow, text, session) {
       return out;
     }
     session.vars[varName] = t;
-    runFrom(node);
+    await runFrom(node);
     return out;
   }
 
@@ -450,7 +531,7 @@ function processMessage(flow, text, session) {
       session.vars[`${cur.type}_choice`] = options[idx];
       session.vars.choice = options[idx]; // generic alias for condition blocks
       if (cur.type === "language") session.vars.language = options[idx];
-      continueOrEnd(cur, idx);
+      await continueOrEnd(cur, idx);
     } else {
       out.push(`Sorry, I didn't catch that.\n\n${optionPrompt(c, session.vars)}`);
     }
@@ -459,7 +540,7 @@ function processMessage(flow, text, session) {
 
   if (cur.type === "faq") {
     if (t === "0") {
-      continueOrEnd(cur, 0);
+      await continueOrEnd(cur, 0);
       return out;
     }
     const hit = (c.pairs || []).find((p) => t.toLowerCase().includes(String(p.k || "").toLowerCase()));
@@ -494,7 +575,7 @@ function processMessage(flow, text, session) {
     const ack = c.ack || meta.ack || "Got it.";
     // acks may reference config fields too (e.g. tracking_link's {baseUrl})
     out.push(interp(ack, { ...c, ...session.vars }));
-    continueOrEnd(cur, 0);
+    await continueOrEnd(cur, 0);
     return out;
   }
 
@@ -505,7 +586,7 @@ function processMessage(flow, text, session) {
       return haystack.includes(q) || q.includes(String(p.name || "").toLowerCase());
     });
     out.push(hit ? productText(hit, session.vars) : interp(c.notFound || "I could not find that product. Try another keyword.", session.vars));
-    continueOrEnd(cur, hit ? 0 : 1);
+    await continueOrEnd(cur, hit ? 0 : 1);
     return out;
   }
 
@@ -519,7 +600,7 @@ function processMessage(flow, text, session) {
     out.push(interp(c.thanks || "Thanks for rating us {rating}/5.", session.vars));
     // fall back to the first wired port so a single outgoing wire covers all ratings
     const port = firstEdge(flow, cur.id, rating - 1) ? rating - 1 : 0;
-    continueOrEnd(cur, port);
+    await continueOrEnd(cur, port);
     return out;
   }
 
