@@ -7,7 +7,7 @@
 // ============================================================
 
 const CANONICAL = "https://flochatbot.com";
-const LASTMOD = "2026-07-14"; // bump when page copy changes
+const LASTMOD = "2026-07-15"; // bump when page copy changes
 
 /* ------------------------------ helpers ------------------------------ */
 
@@ -176,7 +176,7 @@ const FOOTER = `
         <li><a href="/how-to-make-a-whatsapp-bot">How to make a WhatsApp bot</a></li>
         <li><a href="/whatsapp-bot-templates">Free templates</a></li>
         <li><a href="/export-whatsapp-bot-code">Export bot code</a></li>
-        <li><a href="/alternatives">ManyChat / Wati / Landbot alternative</a></li>
+        <li><a href="/whatsapp-bot-comparisons">Compare vs Wati, AiSensy…</a></li>
       </ul>
     </div>
     <div>
@@ -313,7 +313,7 @@ const HOME = {
     <tr><td>AI usage</td><td>Optional, with your own API key</td><td>Bundled, metered, marked up</td></tr>
   </table>
   </div>
-  <p>Comparing specific tools? See how FlowBot stacks up as a <a href="/alternatives">free alternative to ManyChat, Wati and Landbot</a>.</p>
+  <p>Comparing specific tools? See how FlowBot stacks up against <a href="/wati-alternative">Wati</a>, <a href="/aisensy-alternative">AiSensy</a>, <a href="/manychat-alternative">ManyChat</a> and more in the <a href="/whatsapp-bot-comparisons">comparison hub</a>.</p>
 </section>
 
 <section>
@@ -691,6 +691,16 @@ const ALTERNATIVES = {
 
 <h2>When the others are the right choice</h2>
 <p>Pick <strong>ManyChat</strong> if your automation lives mainly on Instagram and Facebook and WhatsApp is a side channel. Pick <strong>Wati</strong> if you need a shared team inbox, broadcast campaigns and marketing tooling around the WhatsApp Business API and the subscription pays for itself. Pick <strong>Landbot</strong> if website chat funnels are your priority and WhatsApp is one of several channels. FlowBot focuses on one thing: building WhatsApp bots you fully own.</p>
+
+<h2>Compare FlowBot with a specific tool</h2>
+<p>Weighing one platform in particular? Read the head-to-head:
+<a href="/wati-alternative">vs Wati</a>,
+<a href="/aisensy-alternative">vs AiSensy</a>,
+<a href="/interakt-alternative">vs Interakt</a>,
+<a href="/manychat-alternative">vs ManyChat</a>,
+<a href="/landbot-alternative">vs Landbot</a>,
+<a href="/gallabox-alternative">vs Gallabox</a> — or see the
+<a href="/whatsapp-bot-comparisons">full comparison hub</a>.</p>
 
 <h2>Migrating is low-risk</h2>
 <p>Because FlowBot is free and works in guest mode, you can rebuild your current bot's flow in an afternoon and run it side-by-side before switching anything. Start from a <a href="/whatsapp-bot-templates">template</a> close to your use case, or paste your bot's script into the AI Builder and edit the flowchart it drafts.</p>

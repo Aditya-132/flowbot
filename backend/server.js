@@ -524,17 +524,21 @@ app.get("/robots.txt", (_req, res) => {
 });
 
 const docs = require("./docs");
+const compare = require("./compare");
+
+// docs + competitor-comparison pages both feed the sitemap and llms.txt
+const extraEntries = [...docs.entries, ...compare.entries];
 
 app.get("/sitemap.xml", (_req, res) => {
-  res.type("application/xml").send(seo.sitemapXml(docs.entries));
+  res.type("application/xml").send(seo.sitemapXml(extraEntries));
 });
 
 app.get("/llms.txt", (_req, res) => {
-  res.type("text/plain").send(seo.llmsTxt(docs.entries));
+  res.type("text/plain").send(seo.llmsTxt(extraEntries));
 });
 
-// Marketing/content pages are pre-rendered once at startup.
-for (const page of seo.pages) {
+// Marketing/content pages + competitor-comparison pages are pre-rendered once.
+for (const page of [...seo.pages, ...compare.pages]) {
   const html = seo.renderPage(page);
   app.get(page.path, (_req, res) => {
     res.set("Cache-Control", "public, max-age=300").type("html").send(html);
