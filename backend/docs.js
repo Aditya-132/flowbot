@@ -385,8 +385,8 @@ const DOCS = [
 <h2>Run it</h2>
 <pre><code>npm install
 cp .env.example .env    # fill in your provider credentials
-npm run start:env       # listens on :3000</code></pre>
-<p>Credentials you had entered in FlowBot are also baked in as fallbacks, so a plain <code>npm start</code> works out of the box. Point your provider's webhook at your server's public URL (the README shows the exact path) and the bot is live.</p>
+npm run start:env       # reads .env; listens on $PORT (default 3000)</code></pre>
+<p>For your safety, your <strong>secret token is not written into <code>server.js</code></strong> — downloadable code can't leak it. Put it in <code>.env</code> and start with <code>npm run start:env</code> (plain <code>npm start</code> does not read <code>.env</code>). Non-secret IDs like your phone number ID are kept as defaults, and the port comes from the <code>PORT</code> environment variable. Point your provider's webhook at your server's public URL (the README shows the exact path) and the bot is live.</p>
 
 <h2>Deploying</h2>
 <ul>
