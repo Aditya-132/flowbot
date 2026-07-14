@@ -47,8 +47,6 @@ const orgJsonLd = {
   name: "FlowBot",
   url: `${CANONICAL}/`,
   logo: `${CANONICAL}/icon-512.png`,
-  founder: { "@type": "Person", name: "Aditya Chincholkar", url: "https://github.com/Aditya-132" },
-  sameAs: ["https://github.com/Aditya-132/flowbot"],
 };
 
 const websiteJsonLd = {
@@ -81,7 +79,6 @@ const appJsonLd = {
     "Optional AI Reply block with your own Anthropic / OpenAI / Gemini key",
     "Full bot code export as ZIP (Node.js + Express)",
   ],
-  author: { "@type": "Person", name: "Aditya Chincholkar", url: "https://github.com/Aditya-132" },
 };
 
 /* ------------------------------ layout ------------------------------ */
@@ -160,7 +157,6 @@ const FOOTER = `
     <div>
       <h4>FlowBot</h4>
       <p>Free drag-and-drop WhatsApp bot builder. Design it as a flowchart, test it live, launch it — or take the code with you.</p>
-      <p><a href="https://github.com/Aditya-132/flowbot" rel="noopener">GitHub</a></p>
     </div>
     <div>
       <h4>Use cases</h4>
@@ -187,7 +183,7 @@ const FOOTER = `
       </ul>
     </div>
   </div>
-  <p style="margin-top:26px">© ${new Date().getFullYear()} FlowBot · Built by <a href="https://github.com/Aditya-132" rel="noopener">Aditya Chincholkar</a></p>
+  <p style="margin-top:26px">© ${new Date().getFullYear()} FlowBot</p>
 </div></footer>`;
 
 const CTA_BAND = `
@@ -721,7 +717,7 @@ const sitemapXml = () => {
 
 const llmsTxt = () => `# FlowBot
 
-> FlowBot (${CANONICAL}) is a free, visual drag-and-drop WhatsApp bot builder. Users design chatbot flows on a flowchart canvas with 40+ ready blocks, build custom blocks in the Block Lab, draft bots with an AI Builder chat, test in a live simulator, launch on Meta WhatsApp Cloud API, Twilio, Green API or Whapi.cloud, and can export the complete bot as a standalone Node.js + Express project (ZIP). Flows are deterministic by default; AI blocks are optional and use the user's own Anthropic/OpenAI/Gemini API key. Built by Aditya Chincholkar.
+> FlowBot (${CANONICAL}) is a free, visual drag-and-drop WhatsApp bot builder. Users design chatbot flows on a flowchart canvas with 40+ ready blocks, build custom blocks in the Block Lab, draft bots with an AI Builder chat, test in a live simulator, launch on Meta WhatsApp Cloud API, Twilio, Green API or Whapi.cloud, and can export the complete bot as a standalone Node.js + Express project (ZIP). Flows are deterministic by default; AI blocks are optional and use the user's own Anthropic/OpenAI/Gemini API key.
 
 Key facts:
 - Price: free (users pay only their WhatsApp provider's message costs)
