@@ -592,13 +592,24 @@ app.use((err, _req, res, _next) => {
 });
 
 /* ------------------- Startup: init DB, then listen ------------------- */
-store
-  .init()
-  .then(() => {
-    app.listen(PORT, () => console.log(`FlowBot backend on http://localhost:${PORT} (Postgres)`));
-  })
-  .catch((e) => {
-    console.error("Failed to connect to Postgres. Set DATABASE_URL or start the DB (docker compose up -d).");
-    console.error(e.message);
-    process.exit(1);
-  });
+// Retry in-process so a DB that's a few seconds late (private networking DNS,
+// container ordering) doesn't turn into a crash-restart loop and a failed
+// healthcheck. Each attempt is bounded by the pool's connection timeout.
+const DB_INIT_ATTEMPTS = 5;
+(async () => {
+  console.log(`Connecting to Postgres at ${store.dbTarget()}...`);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await store.init();
+      break;
+    } catch (e) {
+      console.error(`Postgres init failed (attempt ${attempt}/${DB_INIT_ATTEMPTS}): ${e.message}`);
+      if (attempt >= DB_INIT_ATTEMPTS) {
+        console.error("Failed to connect to Postgres. Set DATABASE_URL or start the DB (docker compose up -d).");
+        process.exit(1);
+      }
+      await new Promise((r) => setTimeout(r, attempt * 2000));
+    }
+  }
+  app.listen(PORT, () => console.log(`FlowBot backend on http://localhost:${PORT} (Postgres)`));
+})();

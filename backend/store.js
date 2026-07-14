@@ -6,10 +6,25 @@
 
 const { Pool } = require("pg");
 
+const DB_URL =
+  process.env.DATABASE_URL || "postgres://flowbot:flowbot@localhost:5432/flowbot";
+
 const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL || "postgres://flowbot:flowbot@localhost:5432/flowbot",
+  connectionString: DB_URL,
+  // Fail fast instead of hanging forever when the DB host is unreachable
+  // (e.g. platform private networking not ready yet) — startup retries instead.
+  connectionTimeoutMillis: 10000,
 });
+
+// Host:port only — safe to log, and tells deploy logs which DB is being dialed.
+function dbTarget() {
+  try {
+    const u = new URL(DB_URL);
+    return `${u.hostname}:${u.port || 5432}`;
+  } catch {
+    return "(unparseable DATABASE_URL)";
+  }
+}
 
 async function init() {
   await pool.query(`
@@ -119,6 +134,7 @@ const rowToFlow = (r) =>
 module.exports = {
   init,
   pool,
+  dbTarget,
 
   list: async (userId) => {
     const { rows } = await pool.query(
