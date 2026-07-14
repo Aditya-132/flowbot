@@ -327,11 +327,13 @@ Deterministic runtime — no AI, no external services beyond your WhatsApp provi
 \`\`\`bash
 npm install
 cp .env.example .env   # fill in your ${info.label} credentials
-npm run start:env      # bot listens on :3000 — webhook: ${info.webhook}
+npm run start:env      # webhook: ${info.webhook} (listens on $PORT, default 3000)
 \`\`\`
 
-(Credentials you entered in FlowBot are also baked into \`server.js\` as fallbacks,
-so plain \`npm start\` works too.)
+Your secret token is **not** written into \`server.js\` (so downloadable code can't
+leak it) — put it in \`.env\` and start with \`npm run start:env\`, which loads \`.env\`
+for you. Non-secret IDs (like your phone number ID) are kept as defaults, and the
+port is read from the \`PORT\` environment variable so cloud hosts work out of the box.
 
 ## Connect it to WhatsApp (${info.label})
 
@@ -340,7 +342,7 @@ ${info.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 ## Files
 
 - \`server.js\` — the complete bot: your flow (as JSON), the FlowBot engine, and the ${info.label} webhook wiring.
-- \`.env.example\` — credentials template. Copy to \`.env\`; \`npm start\` loads it automatically.
+- \`.env.example\` — credentials template. Copy to \`.env\` and run \`npm run start:env\` (plain \`npm start\` does not read \`.env\`).
 - \`package.json\` — one dependency (express).
 
 ## Editing the bot
