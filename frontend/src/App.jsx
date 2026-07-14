@@ -378,6 +378,21 @@ const nodeSummary = (n) => {
 
 /* ---------- app shell: builder is open to guests; auth appears as a
    modal only when saving, making blocks, exporting code or activating ---------- */
+/* ---------- inbox display helpers ---------- */
+const CHANNEL_ICON = { twilio: "📞", meta: "🟢", green: "💚", whapi: "📲", widget: "🌐", simulator: "🧪" };
+const convoLabel = (key) => {
+  const from = key.split("|").slice(1).join("|");
+  if (from.startsWith("web:")) return "Web visitor " + from.slice(4, 10);
+  return from.replace(/^whatsapp:/, "").replace(/@c\.us$/, "");
+};
+const fmtTs = (ts) => {
+  const d = new Date(ts);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : d.toLocaleDateString([], { day: "numeric", month: "short" }) + " " + time;
+};
+
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined = checking session
 
@@ -468,6 +483,23 @@ function Builder({ user, onAuthed, onLogout }) {
   const [shareInfo, setShareInfo] = useState(null); // {publicKey, widgetEnabled, shareEnabled}
   const [shareStats, setShareStats] = useState(null);
 
+  /* ---------- Funnel overlay: conversations reaching each block ---------- */
+  const [funnel, setFunnel] = useState(null); // null = off | {totalSessions, nodes}
+  useEffect(() => { setFunnel(null); }, [botId]); // counts belong to one bot
+
+  /* ---------- Live inbox: real conversations + human takeover ---------- */
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxConvos, setInboxConvos] = useState(null); // null = loading
+  const [inboxSel, setInboxSel] = useState(null); // selected conversation key
+  const [inboxThread, setInboxThread] = useState(null); // {messages, agentMode, channel}
+  const [inboxInput, setInboxInput] = useState("");
+
+  /* ---------- Broadcasts: message every past WhatsApp contact ---------- */
+  const [bcOpen, setBcOpen] = useState(false);
+  const [bcInfo, setBcInfo] = useState(null); // {channel, active, contacts, broadcasts}
+  const [bcMsg, setBcMsg] = useState("");
+  const [bcBusy, setBcBusy] = useState(false);
+
   // /app?clone=KEY — load a publicly shared bot onto the canvas as a copy
   useEffect(() => {
     const key = new URLSearchParams(window.location.search).get("clone");
@@ -499,6 +531,79 @@ function Builder({ user, onAuthed, onLogout }) {
     try { setShareInfo(await api.publish(botId, { [what]: value })); }
     catch (e) { flash("Update failed: " + e.message, true); }
   }
+
+  /* ---------- funnel overlay ---------- */
+  async function toggleFunnel() {
+    if (funnel) { setFunnel(null); return; }
+    if (!userRef.current) { needAuth(toggleFunnel); return; }
+    if (!botId) { flash("Save your bot first — the funnel shows real conversations", true); return; }
+    try {
+      const f = await api.funnel(botId);
+      setFunnel(f);
+      if (!f.totalSessions) flash("No live conversations yet — counts appear once people chat with your bot");
+    } catch (e) { flash("Could not load funnel: " + e.message, true); }
+  }
+
+  /* ---------- live inbox ---------- */
+  const refreshInbox = (id) => api.inbox(id).then((d) => setInboxConvos(d.conversations)).catch(() => {});
+  const refreshThread = (id, key) => api.inboxThread(id, key).then(setInboxThread).catch(() => {});
+  function openInbox() {
+    if (!userRef.current) { needAuth(openInbox); return; }
+    if (!botId) { flash("Save your bot first — conversations appear once people chat with it", true); return; }
+    setInboxOpen(true); setInboxConvos(null); setInboxSel(null); setInboxThread(null); setInboxInput("");
+    refreshInbox(botId);
+  }
+  const openConvo = (key) => { setInboxSel(key); setInboxThread(null); refreshThread(botId, key); };
+  useEffect(() => {
+    if (!inboxOpen || !botId) return;
+    const t = setInterval(() => {
+      refreshInbox(botId);
+      if (inboxSel) refreshThread(botId, inboxSel);
+    }, 4000);
+    return () => clearInterval(t);
+  }, [inboxOpen, inboxSel, botId]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function sendAgentReply() {
+    const msg = inboxInput.trim();
+    if (!msg || !inboxSel) return;
+    setInboxInput("");
+    try {
+      await api.inboxSend(botId, inboxSel, msg);
+      refreshThread(botId, inboxSel);
+    } catch (e) { flash(e.message, true); setInboxInput(msg); }
+  }
+  async function setTakeover(on) {
+    try {
+      await api.inboxAgent(botId, inboxSel, on);
+      refreshThread(botId, inboxSel);
+      refreshInbox(botId);
+    } catch (e) { flash(e.message, true); }
+  }
+
+  /* ---------- broadcasts ---------- */
+  function openBroadcast() {
+    if (!userRef.current) { needAuth(openBroadcast); return; }
+    if (!botId) { flash("Save your bot first — broadcasts go to people who've chatted with it", true); return; }
+    setBcOpen(true); setBcInfo(null);
+    api.broadcasts(botId).then(setBcInfo).catch((e) => { setBcOpen(false); flash(e.message, true); });
+  }
+  useEffect(() => {
+    if (!bcOpen || !botId) return;
+    const t = setInterval(() => api.broadcasts(botId).then(setBcInfo).catch(() => {}), 5000);
+    return () => clearInterval(t);
+  }, [bcOpen, botId]);
+  async function sendBroadcast() {
+    const msg = bcMsg.trim();
+    if (!msg || !bcInfo || bcBusy) return;
+    if (!window.confirm(`Send this message to ${bcInfo.contacts} contact${bcInfo.contacts === 1 ? "" : "s"} on WhatsApp?`)) return;
+    setBcBusy(true);
+    try {
+      await api.createBroadcast(botId, msg);
+      setBcMsg("");
+      flash("📢 Broadcast queued — sending starts within seconds");
+      api.broadcasts(botId).then(setBcInfo).catch(() => {});
+    } catch (e) { flash(e.message, true); }
+    setBcBusy(false);
+  }
   const copyText = (text, label) =>
     navigator.clipboard?.writeText(text).then(() => flash("📋 " + label + " copied"), () => flash("Copy failed — select the text and copy manually", true));
   const pendingAuth = useRef(null); // action to resume after a successful login
@@ -508,6 +613,7 @@ function Builder({ user, onAuthed, onLogout }) {
 
   const hasWelcome = nodes.some((n) => n.type === "welcome");
   const selNode = nodes.find((n) => n.id === sel);
+  const funnelMax = funnel ? Math.max(1, ...Object.values(funnel.nodes).map((v) => v.sessions)) : 1;
 
   useEffect(() => { userRef.current = user; }, [user]);
   useEffect(() => {
@@ -937,6 +1043,21 @@ function Builder({ user, onAuthed, onLogout }) {
             title="Website widget, public share link & analytics">
             📣 Share
           </button>
+          <button style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5 }} onClick={openInbox}
+            title="Live conversations — read along and take over from the bot">
+            📥 Inbox
+          </button>
+          <button style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5 }} onClick={openBroadcast}
+            title="Send one message to everyone who has chatted with your bot on WhatsApp">
+            📢 Broadcast
+          </button>
+          {tab === 0 && (
+            <button onClick={toggleFunnel}
+              title="Overlay: how many conversations reached each block (last 30 days)"
+              style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5, ...(funnel ? { background: "#dcfce7", borderColor: "#059669", color: "#065f46" } : {}) }}>
+              📊 Funnel{funnel ? ` · ${funnel.totalSessions}` : ""}
+            </button>
+          )}
           <div data-tour="tabs" style={{ display: "flex", gap: 6 }}>
             {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
               <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
@@ -1105,6 +1226,163 @@ function Builder({ user, onAuthed, onLogout }) {
                 </div>
               </>);
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ============ LIVE INBOX: real conversations + human takeover ============ */}
+      {inboxOpen && (
+        <div style={S.overlay} onClick={() => setInboxOpen(false)}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "min(880px, 96vw)", height: "min(640px, 90vh)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(15,23,42,.3)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>
+                📥 Inbox — {botName}
+                <span style={{ fontSize: 11, fontWeight: 500, color: "#94a3b8", marginLeft: 10 }}>auto-refreshes</span>
+              </div>
+              <button style={S.miniBtn} onClick={() => setInboxOpen(false)}>✕ close</button>
+            </div>
+            <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+              {/* conversation list */}
+              <div style={{
+                width: isMobile ? "100%" : 290, flexShrink: 0, borderRight: "1px solid #e2e8f0", overflowY: "auto",
+                display: isMobile && inboxSel ? "none" : "block",
+              }}>
+                {!inboxConvos ? (
+                  <div style={{ padding: 24, fontSize: 12.5, color: "#64748b", textAlign: "center" }}>Loading…</div>
+                ) : inboxConvos.length === 0 ? (
+                  <div style={{ padding: 24, fontSize: 12.5, color: "#64748b", lineHeight: 1.6 }}>
+                    No conversations yet. They appear here as soon as someone talks to your bot — on WhatsApp, the website widget or your share page.
+                  </div>
+                ) : inboxConvos.map((c) => (
+                  <div key={c.key} onClick={() => openConvo(c.key)}
+                    style={{
+                      padding: "11px 14px", cursor: "pointer", borderBottom: "1px solid #f1f5f9",
+                      background: inboxSel === c.key ? "#ecfdf5" : "transparent",
+                    }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 700, fontSize: 12.5, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {CHANNEL_ICON[c.channel] || "💬"} {convoLabel(c.key)}
+                      </span>
+                      {c.agentMode && <span style={{ fontSize: 10, background: "#fef3c7", color: "#92400e", borderRadius: 999, padding: "1px 7px", fontWeight: 700 }}>🧑 you</span>}
+                      <span style={{ fontSize: 10.5, color: "#94a3b8", flexShrink: 0 }}>{fmtTs(c.lastTs)}</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.lastDirection === "in" ? "" : c.lastDirection === "agent" ? "🧑 " : "🤖 "}{c.lastBody}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* thread */}
+              <div style={{ flex: 1, minWidth: 0, display: isMobile && !inboxSel ? "none" : "flex", flexDirection: "column" }}>
+                {!inboxSel ? (
+                  <div style={{ margin: "auto", fontSize: 12.5, color: "#94a3b8", padding: 24, textAlign: "center", lineHeight: 1.6 }}>
+                    Pick a conversation to read along.<br />Reply to take over from the bot — it goes quiet until you hand back.
+                  </div>
+                ) : (<>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" }}>
+                    {isMobile && <button style={S.miniBtn} onClick={() => { setInboxSel(null); setInboxThread(null); }}>← back</button>}
+                    <span style={{ fontWeight: 700, fontSize: 12.5, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {convoLabel(inboxSel)}
+                    </span>
+                    {inboxThread && (inboxThread.agentMode ? (<>
+                      <span style={{ fontSize: 10.5, background: "#fef3c7", color: "#92400e", borderRadius: 999, padding: "2px 9px", fontWeight: 700 }}>🧑 you're replying — bot paused</span>
+                      <button style={S.miniBtn} onClick={() => setTakeover(false)} title="The bot resumes from its Welcome block">🤖 Hand back to bot</button>
+                    </>) : (<>
+                      <span style={{ fontSize: 10.5, background: "#ecfdf5", color: "#065f46", borderRadius: 999, padding: "2px 9px", fontWeight: 700 }}>🤖 bot is replying</span>
+                      <button style={S.miniBtn} onClick={() => setTakeover(true)}>🧑 Take over</button>
+                    </>))}
+                  </div>
+                  <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, background: "#f8fafc" }}>
+                    {!inboxThread ? (
+                      <div style={{ margin: "auto", fontSize: 12, color: "#94a3b8" }}>Loading…</div>
+                    ) : inboxThread.messages.map((m) => (
+                      <div key={m.id} style={{ display: "flex", justifyContent: m.direction === "in" ? "flex-start" : "flex-end" }}>
+                        <div title={fmtTs(m.ts)} style={{
+                          maxWidth: "78%", padding: "7px 11px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.5,
+                          whiteSpace: "pre-wrap", wordBreak: "break-word",
+                          background: m.direction === "in" ? "#ffffff" : m.direction === "agent" ? "#fef3c7" : "#d9fdd3",
+                          border: "1px solid " + (m.direction === "in" ? "#e2e8f0" : m.direction === "agent" ? "#fde68a" : "#bbf7d0"),
+                          borderTopLeftRadius: m.direction === "in" ? 4 : 12,
+                          borderTopRightRadius: m.direction === "in" ? 12 : 4,
+                        }}>
+                          {m.direction === "out" && <span style={{ fontSize: 10, color: "#059669", fontWeight: 700 }}>🤖 bot · </span>}
+                          {m.direction === "agent" && <span style={{ fontSize: 10, color: "#92400e", fontWeight: 700 }}>🧑 you · </span>}
+                          {m.body}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, padding: "10px 14px", borderTop: "1px solid #e2e8f0" }}>
+                    <input style={{ ...S.input, flex: 1, borderRadius: 20 }} value={inboxInput}
+                      placeholder={inboxThread?.agentMode ? "Reply as yourself…" : "Type to take over and reply as yourself…"}
+                      onChange={(e) => setInboxInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && sendAgentReply()} />
+                    <button style={{ ...S.primaryBtn, borderRadius: 20, padding: "8px 16px", opacity: inboxInput.trim() ? 1 : 0.5 }}
+                      disabled={!inboxInput.trim()} onClick={sendAgentReply}>➤</button>
+                  </div>
+                </>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ BROADCAST: one message to every past WhatsApp contact ============ */}
+      {bcOpen && (
+        <div style={S.overlay} onClick={() => setBcOpen(false)}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 20, width: "min(580px, 94vw)", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 80px rgba(15,23,42,.3)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>📢 Broadcast — {botName}</div>
+              <button style={S.miniBtn} onClick={() => setBcOpen(false)}>✕ close</button>
+            </div>
+            {!bcInfo ? (
+              <div style={{ padding: 30, textAlign: "center", color: "#64748b", fontSize: 13 }}>Loading…</div>
+            ) : (<>
+              {!bcInfo.active ? (
+                <div style={{ fontSize: 12.5, color: "#64748b", lineHeight: 1.6, border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, marginTop: 10 }}>
+                  Broadcasts push a message to everyone who has chatted with your bot on WhatsApp.
+                  Activate your bot on a provider first (tab <b>3 · Activate &amp; test</b>) — website-widget visitors can't receive pushed messages.
+                </div>
+              ) : (<>
+                <div style={{ fontSize: 12.5, color: "#334155", margin: "10px 0 8px" }}>
+                  Reachable contacts on <b>{bcInfo.channel}</b>: <b style={{ fontSize: 15 }}>{bcInfo.contacts}</b>
+                  <span style={{ color: "#94a3b8" }}> — everyone who messaged your bot on this provider (max 500 per send)</span>
+                </div>
+                <textarea style={{ ...S.textarea, width: "100%" }} rows={4} value={bcMsg} maxLength={1500}
+                  placeholder="Your announcement, offer or update — e.g. 🎉 Weekend sale: 20% off everything with code SAVE20"
+                  onChange={(e) => setBcMsg(e.target.value)} />
+                <div style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 10px", lineHeight: 1.5 }}>
+                  ⚠️ WhatsApp providers deliver freeform messages reliably only to people active in the last 24 h — older contacts may silently not receive it (Meta requires pre-approved templates for those).
+                </div>
+                <button style={{ ...S.primaryBtn, width: "100%", opacity: bcBusy || !bcMsg.trim() || !bcInfo.contacts ? 0.5 : 1 }}
+                  disabled={bcBusy || !bcMsg.trim() || !bcInfo.contacts} onClick={sendBroadcast}>
+                  📢 Send to {bcInfo.contacts} contact{bcInfo.contacts === 1 ? "" : "s"}
+                </button>
+              </>)}
+              {bcInfo.broadcasts.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>Past broadcasts</div>
+                  {bcInfo.broadcasts.map((b) => (
+                    <div key={b.id} style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "9px 12px", marginBottom: 6, fontSize: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 800, borderRadius: 999, padding: "1px 8px",
+                          background: { queued: "#fef3c7", sending: "#dbeafe", done: "#dcfce7", failed: "#fee2e2" }[b.status] || "#e2e8f0",
+                          color: { queued: "#92400e", sending: "#1d4ed8", done: "#065f46", failed: "#b91c1c" }[b.status] || "#334155",
+                        }}>{b.status}</span>
+                        <span style={{ color: "#94a3b8", fontSize: 10.5 }}>{fmtTs(b.created_at)}</span>
+                        <span style={{ marginLeft: "auto", color: "#64748b", fontSize: 11 }}>
+                          {b.status === "queued" ? `${b.total} queued` : `${b.sent_count}/${b.total} sent${b.fail_count ? ` · ${b.fail_count} failed` : ""}`}
+                        </span>
+                      </div>
+                      <div style={{ color: "#334155", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>)}
           </div>
         </div>
       )}
@@ -1314,6 +1592,22 @@ function Builder({ user, onAuthed, onLogout }) {
                       onPointerDown={(e) => startConnect(e, n, i)}
                       title={outputCount(n) > 1 ? `drag to connect · ${portLabel(n, i)}` : "drag to connect"} />
                   ))}
+                  {funnel && (() => {
+                    const st = funnel.nodes[n.id];
+                    const sess = st ? st.sessions : 0;
+                    return (
+                      <div title={`${sess} conversation${sess === 1 ? "" : "s"} reached this block in the last 30 days${st ? ` · ${st.visits} total visits` : ""}`}
+                        style={{
+                          position: "absolute", top: -11, right: -9, minWidth: 22, textAlign: "center",
+                          padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 800,
+                          color: sess ? "#052e16" : "#64748b",
+                          background: sess ? `rgba(37,211,102,${(0.3 + 0.7 * sess / funnelMax).toFixed(2)})` : "#e2e8f0",
+                          border: "1.5px solid #ffffff", boxShadow: "0 2px 6px rgba(15,23,42,.2)", zIndex: 3,
+                        }}>
+                        👤{sess}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

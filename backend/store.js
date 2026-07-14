@@ -110,6 +110,47 @@ async function init() {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS bot_events_bot_ts ON bot_events (bot_id, ts);`);
+
+  // one row per block a conversation reached — powers the canvas funnel overlay
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS node_events (
+      id          BIGSERIAL PRIMARY KEY,
+      bot_id      TEXT NOT NULL,
+      session_key TEXT NOT NULL,
+      node_id     TEXT NOT NULL,
+      ts          TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS node_events_bot_ts ON node_events (bot_id, ts);`);
+
+  // full message history per conversation — powers the live inbox
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id          BIGSERIAL PRIMARY KEY,
+      bot_id      TEXT NOT NULL,
+      session_key TEXT NOT NULL,
+      channel     TEXT NOT NULL DEFAULT '',
+      direction   TEXT NOT NULL,
+      body        TEXT NOT NULL,
+      ts          TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS chat_messages_session ON chat_messages (bot_id, session_key, id);`);
+
+  // owner-composed campaigns sent to every past contact on the bot's provider
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS broadcasts (
+      id         TEXT PRIMARY KEY,
+      bot_id     TEXT NOT NULL,
+      message    TEXT NOT NULL,
+      status     TEXT NOT NULL DEFAULT 'queued',
+      send_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      total      INT NOT NULL DEFAULT 0,
+      sent_count INT NOT NULL DEFAULT 0,
+      fail_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 }
 
 const rowToFlow = (r) =>
@@ -270,6 +311,174 @@ module.exports = {
       params
     );
     return { totals: totals.rows[0], daily: daily.rows, channels: channels.rows };
+  },
+
+  /* ---------- funnel: which blocks conversations actually reach ---------- */
+  logNodeEvents: async (botId, sessionKey, nodeIds) => {
+    await pool.query(
+      `INSERT INTO node_events (bot_id, session_key, node_id)
+       SELECT $1, $2, unnest($3::text[])`,
+      [botId, sessionKey, nodeIds]
+    );
+  },
+
+  funnel: async (botId, days = 30) => {
+    const params = [botId, String(days)];
+    const perNode = await pool.query(
+      `SELECT node_id, COUNT(*)::int AS visits, COUNT(DISTINCT session_key)::int AS sessions
+       FROM node_events WHERE bot_id = $1 AND ts > now() - ($2 || ' days')::interval
+       GROUP BY node_id`,
+      params
+    );
+    const total = await pool.query(
+      `SELECT COUNT(DISTINCT session_key)::int AS sessions
+       FROM node_events WHERE bot_id = $1 AND ts > now() - ($2 || ' days')::interval`,
+      params
+    );
+    return {
+      totalSessions: total.rows[0].sessions,
+      nodes: Object.fromEntries(perNode.rows.map((r) => [r.node_id, { sessions: r.sessions, visits: r.visits }])),
+    };
+  },
+
+  /* ---------- inbox: message history + human takeover ---------- */
+  // rows = [[direction, body], ...] — one INSERT so ids preserve message order
+  logChatMessages: async (botId, sessionKey, channel, rows) => {
+    if (!rows.length) return;
+    await pool.query(
+      `INSERT INTO chat_messages (bot_id, session_key, channel, direction, body)
+       SELECT $1, $2, $3, unnest($4::text[]), unnest($5::text[])`,
+      [botId, sessionKey, channel, rows.map((r) => r[0]), rows.map((r) => String(r[1]).slice(0, 4000))]
+    );
+  },
+
+  inboxList: async (botId, limit = 50) => {
+    const { rows } = await pool.query(
+      `SELECT c.session_key, c.messages, m.channel, m.direction AS last_direction,
+              m.body AS last_body, m.ts AS last_ts,
+              COALESCE((s.data->>'agentMode')::boolean, false) AS agent_mode
+       FROM (
+         SELECT session_key, MAX(id) AS last_id, COUNT(*)::int AS messages
+         FROM chat_messages WHERE bot_id = $1
+         GROUP BY session_key ORDER BY MAX(id) DESC LIMIT $2
+       ) c
+       JOIN chat_messages m ON m.id = c.last_id
+       LEFT JOIN chat_sessions s ON s.key = c.session_key`,
+      [botId, limit]
+    );
+    return rows.map((r) => ({
+      key: r.session_key,
+      channel: r.channel,
+      messages: r.messages,
+      lastDirection: r.last_direction,
+      lastBody: r.last_body,
+      lastTs: r.last_ts,
+      agentMode: r.agent_mode,
+    }));
+  },
+
+  inboxThread: async (botId, sessionKey, limit = 200) => {
+    const { rows } = await pool.query(
+      `SELECT id, channel, direction, body, ts FROM chat_messages
+       WHERE bot_id = $1 AND session_key = $2 ORDER BY id DESC LIMIT $3`,
+      [botId, sessionKey, limit]
+    );
+    const session = await pool.query(`SELECT data FROM chat_sessions WHERE key = $1`, [sessionKey]);
+    const data = session.rows[0]?.data || {};
+    return {
+      messages: rows.reverse(),
+      agentMode: data.agentMode === true,
+      channel: rows.length ? rows[rows.length - 1].channel : data.channel || "",
+    };
+  },
+
+  // read without bumping last_seen — widget polling must not keep sessions alive
+  peekChatSession: async (key) => {
+    const { rows } = await pool.query(`SELECT data FROM chat_sessions WHERE key = $1`, [key]);
+    return rows[0] ? rows[0].data : null;
+  },
+
+  setAgentMode: async (key, botId, on) => {
+    const existing = await pool.query(`SELECT data FROM chat_sessions WHERE key = $1`, [key]);
+    const data = existing.rows[0]?.data || { state: null, vars: {} };
+    data.agentMode = !!on;
+    await pool.query(
+      `INSERT INTO chat_sessions (key, bot_id, data, last_seen) VALUES ($1, $2, $3, now())
+       ON CONFLICT (key) DO UPDATE SET data = $3, last_seen = now()`,
+      [key, botId, JSON.stringify(data)]
+    );
+    return data;
+  },
+
+  agentMessagesAfter: async (botId, sessionKey, afterId) => {
+    if (afterId == null) {
+      const { rows } = await pool.query(
+        `SELECT COALESCE(MAX(id), 0)::bigint AS last FROM chat_messages
+         WHERE bot_id = $1 AND session_key = $2 AND direction = 'agent'`,
+        [botId, sessionKey]
+      );
+      return { last: Number(rows[0].last), messages: [] };
+    }
+    const { rows } = await pool.query(
+      `SELECT id, body FROM chat_messages
+       WHERE bot_id = $1 AND session_key = $2 AND direction = 'agent' AND id > $3
+       ORDER BY id LIMIT 50`,
+      [botId, sessionKey, afterId]
+    );
+    const last = rows.length ? Number(rows[rows.length - 1].id) : Number(afterId);
+    return { last, messages: rows.map((r) => ({ id: Number(r.id), body: r.body })) };
+  },
+
+  cleanupChatMessages: async (days = 30) => {
+    await pool.query(`DELETE FROM chat_messages WHERE ts < now() - ($1 || ' days')::interval`, [String(days)]);
+    await pool.query(`DELETE FROM node_events WHERE ts < now() - ($1 || ' days')::interval`, [String(days)]);
+  },
+
+  /* ---------- broadcasts ---------- */
+  // everyone who ever messaged this bot on the given channel; the session_key
+  // suffix after "botId|" is the provider address we can push back to
+  broadcastContacts: async (botId, channel, cap = 500) => {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT session_key FROM bot_events
+       WHERE bot_id = $1 AND channel = $2 AND session_key IS NOT NULL
+       ORDER BY session_key LIMIT $3`,
+      [botId, channel, cap]
+    );
+    return rows.map((r) => r.session_key.slice(botId.length + 1)).filter(Boolean);
+  },
+
+  createBroadcast: async (b) => {
+    const { rows } = await pool.query(
+      `INSERT INTO broadcasts (id, bot_id, message, total) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [b.id, b.botId, b.message, b.total]
+    );
+    return rows[0];
+  },
+
+  listBroadcasts: async (botId, limit = 20) => {
+    const { rows } = await pool.query(
+      `SELECT id, message, status, total, sent_count, fail_count, created_at
+       FROM broadcasts WHERE bot_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [botId, limit]
+    );
+    return rows;
+  },
+
+  // claim due broadcasts atomically so overlapping ticks never double-send
+  claimDueBroadcasts: async () => {
+    const { rows } = await pool.query(
+      `UPDATE broadcasts SET status = 'sending' WHERE id IN (
+         SELECT id FROM broadcasts WHERE status = 'queued' AND send_at <= now() LIMIT 3
+       ) RETURNING *`
+    );
+    return rows;
+  },
+
+  finishBroadcast: async (id, { status, sent, failed }) => {
+    await pool.query(
+      `UPDATE broadcasts SET status = $2, sent_count = $3, fail_count = $4 WHERE id = $1`,
+      [id, status, sent, failed]
+    );
   },
 
   /* ---------- custom feature blocks (Block Lab) ---------- */

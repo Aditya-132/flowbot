@@ -308,18 +308,19 @@ function isOpenNow(c) {
  * @param {object} flow     {nodes:[{id,type,config}], edges:[{from,fromPort,to}]}
  * @param {string} text     incoming message body
  * @param {object} session  mutable {state, vars}
+ * @param {string[]} [trace]  optional — collects the id of every block executed
  * @returns {Promise<string[]>}  bot replies
  */
-async function handleMessage(flow, text, session) {
+async function handleMessage(flow, text, session, trace) {
   // drop empty strings so optional messages (blank condition/hours text) never
   // reach the provider — WhatsApp APIs reject empty bodies
-  const replies = (await processMessage(flow, text, session)).map((r) => String(r ?? "").trim()).filter(Boolean);
+  const replies = (await processMessage(flow, text, session, trace)).map((r) => String(r ?? "").trim()).filter(Boolean);
   // never leave the customer on silence when a branch dead-ends
   if (!replies.length) replies.push("✅ That's all for now. Send any message to start over.");
   return replies;
 }
 
-async function processMessage(flow, text, session) {
+async function processMessage(flow, text, session, trace) {
   const out = [];
   const byId = Object.fromEntries(flow.nodes.map((n) => [n.id, n]));
   const next = (id, port) => getNext(flow, byId, id, port);
@@ -335,6 +336,7 @@ async function processMessage(flow, text, session) {
     let guard = 0;
     while (cur && guard++ < 80) {
       const c = cur.config || {};
+      if (trace) trace.push(cur.id);
 
       const need = missingVar(cur, session.vars);
       if (need) {
@@ -543,7 +545,7 @@ async function processMessage(flow, text, session) {
     const s = steps[idx];
     if (!node || !s) {
       session.state = null;
-      return handleMessage(flow, text, session);
+      return handleMessage(flow, text, session, trace);
     }
     if (s.kind === "ask") {
       if (!t) {
@@ -613,7 +615,7 @@ async function processMessage(flow, text, session) {
     const [, nodeId, varName] = session.state.split("|");
     const node = byId[nodeId];
     session.state = null;
-    if (!node) return handleMessage(flow, text, session);
+    if (!node) return handleMessage(flow, text, session, trace);
     if (!t) {
       out.push(askFor(varName));
       session.state = `ask|${nodeId}|${varName}`;
@@ -627,7 +629,7 @@ async function processMessage(flow, text, session) {
   const cur = byId[session.state];
   if (!cur) {
     session.state = null;
-    return handleMessage(flow, text, session);
+    return handleMessage(flow, text, session, trace);
   }
 
   const c = cur.config || {};
@@ -745,7 +747,7 @@ async function processMessage(flow, text, session) {
 
   // state pointed at a non-interactive block (stale flow edit) — restart cleanly
   session.state = null;
-  return handleMessage(flow, text, session);
+  return handleMessage(flow, text, session, trace);
 }
 
 module.exports = { handleMessage, interp };

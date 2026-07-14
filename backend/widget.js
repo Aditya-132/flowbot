@@ -132,7 +132,7 @@ button.send{background:#25D366;border:0;border-radius:50%;width:44px;height:44px
 <body>
 <header>
   <div class="dot">🤖</div>
-  <div><div class="t">${name}</div><div class="s">usually replies instantly</div></div>
+  <div><div class="t">${name}</div><div class="s" id="sub">usually replies instantly</div></div>
   <button id="reset" title="Restart the conversation">↻ Restart</button>
 </header>
 <div id="msgs"></div>
@@ -159,6 +159,19 @@ button.send{background:#25D366;border:0;border-radius:50%;width:44px;height:44px
   form.addEventListener("submit",function(e){e.preventDefault();var v=inp.value.trim();if(!v||busy)return;add(v,"me");inp.value="";send(v);});
   document.getElementById("reset").addEventListener("click",function(){msgs.innerHTML="";send("hi",true);});
   send("hi",true);
+  // poll for human (inbox takeover) replies; first call only learns the cursor
+  var sub=document.getElementById("sub"),after=null,agentOn=false;
+  function poll(){
+    fetch("/api/public/"+KEY+"/updates?sessionId="+sid+(after===null?"":"&after="+after))
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){
+        if(!d||typeof d.last!=="number")return;
+        if(after!==null)(d.messages||[]).forEach(function(m){add(m.body,"bot");});
+        after=d.last;
+        if(d.agent!==agentOn){agentOn=d.agent;sub.textContent=agentOn?"🧑 a teammate is replying":"usually replies instantly";}
+      }).catch(function(){});
+  }
+  poll();setInterval(poll,3500);
 })();
 </script>
 </body>

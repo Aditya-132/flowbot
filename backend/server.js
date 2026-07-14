@@ -18,6 +18,7 @@ const { buildZip } = require("./zip");
 const metaApi = require("./meta");
 const greenApi = require("./green");
 const whapi = require("./whapi");
+const twilioApi = require("./twilio");
 
 const PORT = process.env.PORT || 3001;
 const app = express();
@@ -30,17 +31,45 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 
 // Chat sessions persist in Postgres (key = botId + "|" + sender), so live
 // conversations survive restarts and deploys. runBot handles one incoming
-// message end-to-end: load session → engine → save session → log an
-// analytics event (the simulator is excluded from analytics).
+// message end-to-end: load session → engine → save session → log analytics
+// events, message history and the per-block funnel trace (the simulator is
+// excluded from all logging). When the owner has taken a conversation over
+// from the inbox (session.agentMode), the bot stays silent.
 async function runBot(flow, channel, from, text) {
   const key = `${flow.id}|${from}`;
   const session = (await store.getChatSession(key)) || { state: null, vars: {} };
-  const replies = await handleMessage(flow, text, session);
+  const live = channel !== "simulator";
+  if (live) session.channel = channel;
+  if (live && session.agentMode) {
+    await store.saveChatSession(key, flow.id, session);
+    store.logChatMessages(flow.id, key, channel, [["in", text]]).catch(() => {});
+    return [];
+  }
+  const trace = live ? [] : null;
+  const replies = await handleMessage(flow, text, session, trace);
   await store.saveChatSession(key, flow.id, session);
-  if (channel !== "simulator") store.logEvent(flow.id, channel, key, replies.length).catch(() => {});
+  if (live) {
+    store.logEvent(flow.id, channel, key, replies.length).catch(() => {});
+    if (trace.length) store.logNodeEvents(flow.id, key, trace).catch(() => {});
+    store.logChatMessages(flow.id, key, channel, [["in", text], ...replies.map((r) => ["out", r])]).catch(() => {});
+  }
   return replies;
 }
-setInterval(() => store.cleanupChatSessions(12).catch(() => {}), 10 * 60 * 1000).unref();
+setInterval(() => {
+  store.cleanupChatSessions(12).catch(() => {});
+  store.cleanupChatMessages(30).catch(() => {});
+}, 10 * 60 * 1000).unref();
+
+// Push a message to a customer on whatever channel they used. Widget/share
+// conversations have no push channel — the chat page polls for agent replies.
+async function sendToCustomer(flow, channel, to, text) {
+  if (channel === "twilio" && flow.twilio) return twilioApi.sendText(flow.twilio, to, text);
+  if (channel === "meta" && flow.meta) return metaApi.sendText(flow.meta, to, text);
+  if (channel === "green" && flow.green) return greenApi.sendText(flow.green, to, text);
+  if (channel === "whapi" && flow.whapi) return whapi.sendText(flow.whapi, to, text);
+  if (channel === "widget") return; // delivered by the widget's poll
+  throw new Error(`no credentials to send on channel "${channel}"`);
+}
 
 const NODE_LIMIT = 150;
 const STEP_KINDS = new Set(["say", "ask", "set", "api", "ai", "choice"]);
@@ -407,6 +436,113 @@ app.get("/api/flows/:id/analytics", wrap(async (req, res) => {
   res.json(await store.analytics(f.id, 30));
 }));
 
+// funnel overlay: how many conversations reached each block (last 30 days)
+app.get("/api/flows/:id/funnel", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  res.json(await store.funnel(f.id, 30));
+}));
+
+/* ------------------- Live inbox: history + human takeover ------------------- */
+app.get("/api/flows/:id/inbox", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  res.json({ conversations: await store.inboxList(f.id) });
+}));
+
+app.get("/api/flows/:id/inbox/thread", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const key = String(req.query.key || "");
+  if (!key.startsWith(`${f.id}|`)) return res.status(400).json({ error: "invalid conversation key" });
+  res.json(await store.inboxThread(f.id, key));
+}));
+
+// toggle takeover: on = bot goes silent for this conversation, off = bot resumes
+app.post("/api/flows/:id/inbox/agent", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const key = String(req.body.key || "");
+  if (!key.startsWith(`${f.id}|`)) return res.status(400).json({ error: "invalid conversation key" });
+  const data = await store.setAgentMode(key, f.id, !!req.body.on);
+  res.json({ agentMode: data.agentMode === true });
+}));
+
+// owner replies by hand; takeover switches on automatically so the bot
+// doesn't talk over the human
+app.post("/api/flows/:id/inbox/send", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const key = String(req.body.key || "");
+  const message = String(req.body.message || "").trim().slice(0, 1500);
+  if (!key.startsWith(`${f.id}|`)) return res.status(400).json({ error: "invalid conversation key" });
+  if (!message) return res.status(400).json({ error: "message is required" });
+  const thread = await store.inboxThread(f.id, key, 1);
+  const channel = thread.channel;
+  if (!channel) return res.status(400).json({ error: "conversation has no messages yet" });
+  const to = key.slice(f.id.length + 1);
+  try {
+    await sendToCustomer(f, channel, to, message);
+  } catch (e) {
+    return res.status(502).json({ error: `send failed: ${e.message}` });
+  }
+  await store.setAgentMode(key, f.id, true);
+  await store.logChatMessages(f.id, key, channel, [["agent", message]]);
+  res.json({ ok: true, agentMode: true });
+}));
+
+/* ------------------- Broadcasts ------------------- */
+// reachable contacts = everyone who messaged on the bot's current provider;
+// widget visitors can't be pushed to, so they're never included
+app.get("/api/flows/:id/broadcasts", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const channel = f.active ? f.provider : null;
+  const contacts = channel ? (await store.broadcastContacts(f.id, channel)).length : 0;
+  res.json({ channel, active: !!f.active, contacts, broadcasts: await store.listBroadcasts(f.id) });
+}));
+
+app.post("/api/flows/:id/broadcasts", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const message = String(req.body.message || "").trim().slice(0, 1500);
+  if (!message) return res.status(400).json({ error: "message is required" });
+  if (!f.active) return res.status(400).json({ error: "activate your bot on a WhatsApp provider first" });
+  const contacts = await store.broadcastContacts(f.id, f.provider);
+  if (!contacts.length) return res.status(400).json({ error: "no contacts yet — people who message your bot become reachable" });
+  const b = await store.createBroadcast({ id: crypto.randomBytes(6).toString("hex"), botId: f.id, message, total: contacts.length });
+  res.status(201).json(b);
+}));
+
+// scheduler: pick up queued broadcasts and send with a gentle pace so
+// provider rate limits stay comfortable
+async function processBroadcasts() {
+  const due = await store.claimDueBroadcasts();
+  for (const b of due) {
+    let sent = 0, failed = 0;
+    try {
+      const f = await store.get(b.bot_id);
+      if (!f || !f.active) throw new Error("bot inactive");
+      const contacts = await store.broadcastContacts(f.id, f.provider);
+      for (const to of contacts) {
+        try {
+          await sendToCustomer(f, f.provider, to, b.message);
+          store.logChatMessages(f.id, `${f.id}|${to}`, f.provider, [["agent", b.message]]).catch(() => {});
+          sent++;
+        } catch {
+          failed++;
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      await store.finishBroadcast(b.id, { status: failed && !sent ? "failed" : "done", sent, failed });
+    } catch (e) {
+      console.error(`broadcast ${b.id} failed:`, e.message);
+      await store.finishBroadcast(b.id, { status: "failed", sent, failed }).catch(() => {});
+    }
+  }
+}
+setInterval(() => processBroadcasts().catch((e) => console.error("broadcast tick failed:", e.message)), 15000).unref();
+
 // Two-tier rate limit for the public chat API. Tight enough to stop floods,
 // loose enough that a fast human demo (or a few visitors behind one office
 // NAT) never trips it: 30 msgs/min per visitor session, 120 msgs/min per IP.
@@ -437,6 +573,24 @@ app.post("/api/public/:key/chat", wrap(async (req, res) => {
   if (req.body.reset) await store.deleteChatSession(`${f.id}|${from}`);
   const replies = await runBot(f, "widget", from, String(req.body.message ?? "").slice(0, 1000));
   res.json({ replies });
+}));
+
+// widget poll: agent (human) replies since `after`, plus whether a human has
+// taken over. First call omits `after` and just learns the current cursor, so
+// old agent messages never replay on page reload.
+app.get("/api/public/:key/updates", wrap(async (req, res) => {
+  const f = await store.getByPublicKey(req.params.key);
+  if (!f || (!f.widgetEnabled && !f.shareEnabled)) return res.status(404).json({ error: "bot not found" });
+  const sid = String(req.query.sessionId || "");
+  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(sid)) return res.status(400).json({ error: "invalid session" });
+  const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+  if (!bucketAllowed(`u|${req.params.key}|${ip}|${sid}`, 40))
+    return res.status(429).json({ error: "too many requests" });
+  const key = `${f.id}|web:${sid}`;
+  const after = /^\d+$/.test(String(req.query.after ?? "")) ? Number(req.query.after) : null;
+  const { last, messages } = await store.agentMessagesAfter(f.id, key, after);
+  const session = await store.peekChatSession(key);
+  res.json({ last, messages, agent: session?.agentMode === true });
 }));
 
 // flow JSON for "clone this bot" — secrets never leave the server:
