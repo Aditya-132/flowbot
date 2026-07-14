@@ -6,8 +6,11 @@
 
 const { Pool } = require("pg");
 
-const DB_URL =
-  process.env.DATABASE_URL || "postgres://flowbot:flowbot@localhost:5432/flowbot";
+// trim(): stray whitespace around a pasted URL makes pg dial its internal
+// dummy host ("base") instead of erroring — see pg-connection-string parse().
+const DB_URL = (
+  process.env.DATABASE_URL || "postgres://flowbot:flowbot@localhost:5432/flowbot"
+).trim();
 
 const pool = new Pool({
   connectionString: DB_URL,
