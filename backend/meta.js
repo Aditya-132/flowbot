@@ -5,7 +5,7 @@
 // GRAPH_API_BASE is overridable so tests can point at a mock server.
 // ============================================================
 
-const GRAPH_API_BASE = process.env.GRAPH_API_BASE || "https://graph.facebook.com/v21.0";
+const GRAPH_API_BASE = process.env.GRAPH_API_BASE || "https://graph.facebook.com/v23.0";
 
 /** Extract the first incoming message from a Cloud API webhook payload. */
 function extractIncoming(body) {

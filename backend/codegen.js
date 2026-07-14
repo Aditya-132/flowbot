@@ -62,7 +62,8 @@ app.post("/whatsapp", async (req, res) => {
 });
 
 app.get("/", (_req, res) => res.send("${title(flow)} is running. Webhook: POST /whatsapp"));
-app.listen(3000, () => console.log("Bot listening on :3000 — webhook: POST /whatsapp"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Bot listening on :" + PORT + " — webhook: POST /whatsapp"));
 `;
 }
 
@@ -81,7 +82,7 @@ const META = {
   accessToken:   process.env.META_ACCESS_TOKEN || "${meta.accessToken ? "SET_VIA_ENV_VAR" : "YOUR_META_ACCESS_TOKEN"}",
   phoneNumberId: process.env.META_PHONE_NUMBER_ID || "${meta.phoneNumberId || "YOUR_PHONE_NUMBER_ID"}",
   verifyToken:   process.env.META_VERIFY_TOKEN || "${meta.verifyToken || "flowbot-verify"}",
-  graphBase:     "https://graph.facebook.com/v21.0",
+  graphBase:     process.env.GRAPH_API_BASE || "https://graph.facebook.com/v23.0",
 };
 
 const FLOW = ${flowJson(flow)};
@@ -121,7 +122,8 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.get("/", (_req, res) => res.send("${title(flow, " (Meta Cloud API)")} is running. Webhook: /webhook"));
-app.listen(3000, () => console.log("Bot listening on :3000 — webhook: /webhook"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Bot listening on :" + PORT + " — webhook: /webhook"));
 `;
 }
 
@@ -183,7 +185,8 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.get("/", (_req, res) => res.send("${title(flow, " (Green API)")} is running. Webhook: /webhook"));
-app.listen(3000, () => console.log("Bot listening on :3000 — webhook: /webhook"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Bot listening on :" + PORT + " — webhook: /webhook"));
 `;
 }
 
@@ -251,7 +254,8 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.get("/", (_req, res) => res.send("${title(flow, " (Whapi.cloud)")} is running. Webhook: /webhook"));
-app.listen(3000, () => console.log("Bot listening on :3000 — webhook: /webhook"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Bot listening on :" + PORT + " — webhook: /webhook"));
 `;
 }
 

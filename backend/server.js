@@ -407,19 +407,22 @@ app.get("/api/flows/:id/analytics", wrap(async (req, res) => {
   res.json(await store.analytics(f.id, 30));
 }));
 
-// naive per-key+IP rate limit for the public chat API: 20 messages / 30s
+// Two-tier rate limit for the public chat API. Tight enough to stop floods,
+// loose enough that a fast human demo (or a few visitors behind one office
+// NAT) never trips it: 30 msgs/min per visitor session, 120 msgs/min per IP.
+const RATE_WINDOW_MS = 60000;
 const chatBuckets = new Map();
-const chatAllowed = (k) => {
+const bucketAllowed = (k, limit) => {
   const now = Date.now();
-  const recent = (chatBuckets.get(k) || []).filter((t) => now - t < 30000);
-  if (recent.length >= 20) return false;
+  const recent = (chatBuckets.get(k) || []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (recent.length >= limit) return false;
   recent.push(now);
   chatBuckets.set(k, recent);
   return true;
 };
 setInterval(() => {
   const now = Date.now();
-  for (const [k, b] of chatBuckets) if (!b.some((t) => now - t < 30000)) chatBuckets.delete(k);
+  for (const [k, b] of chatBuckets) if (!b.some((t) => now - t < RATE_WINDOW_MS)) chatBuckets.delete(k);
 }, 60000).unref();
 
 app.post("/api/public/:key/chat", wrap(async (req, res) => {
@@ -428,7 +431,8 @@ app.post("/api/public/:key/chat", wrap(async (req, res) => {
   const sid = String(req.body.sessionId || "");
   if (!/^[a-zA-Z0-9_-]{8,64}$/.test(sid)) return res.status(400).json({ error: "invalid session" });
   const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
-  if (!chatAllowed(`${req.params.key}|${ip}`)) return res.status(429).json({ error: "Too many messages — please slow down." });
+  if (!bucketAllowed(`s|${req.params.key}|${ip}|${sid}`, 30) || !bucketAllowed(`i|${req.params.key}|${ip}`, 120))
+    return res.status(429).json({ error: "Too many messages — please slow down." });
   const from = `web:${sid}`;
   if (req.body.reset) await store.deleteChatSession(`${f.id}|${from}`);
   const replies = await runBot(f, "widget", from, String(req.body.message ?? "").slice(0, 1000));
