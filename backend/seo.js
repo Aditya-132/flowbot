@@ -105,6 +105,12 @@ nav.top a:hover{color:#0e7a4b}
 .hero h1{font-size:clamp(30px,4.5vw,46px);margin:0 0 14px}
 .hero p.lead{font-size:19px;color:#33523f;margin:0 0 24px}
 .hero .sub{font-size:14px;color:#5b7466;margin-top:12px}
+.hero .ownline{font-size:20px;font-weight:800;color:#0e7a4b;margin:0 0 16px}
+.hero .ownline strong{color:#0b2818;border-bottom:3px solid #25D366}
+.ownbanner{background:linear-gradient(135deg,#0b2818,#0e7a4b);border-radius:18px;padding:26px 30px;color:#eafff2}
+.ownbanner .ownbig{font-size:clamp(20px,3vw,26px);font-weight:800;color:#fff;margin-bottom:8px}
+.ownbanner p{margin:0;color:#c9ead6;font-size:16px}
+.ownbanner a{color:#8fe0ae;font-weight:700}
 .hero svg{max-width:100%;height:auto}
 section{padding:26px 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:18px}
@@ -268,18 +274,28 @@ const HOME = {
   priority: "1.0",
   changefreq: "weekly",
   title: "FlowBot — Free WhatsApp Bot Builder | Drag & Drop, No Code",
-  desc: "Build a WhatsApp chatbot free with FlowBot's drag-and-drop flowchart builder: 40+ blocks, ready templates, live simulator, Meta / Twilio / Green API / Whapi launch, full code export as ZIP.",
+  desc: "Build a WhatsApp chatbot free with FlowBot's drag-and-drop flowchart builder. Use any provider's API — Meta, Twilio, Green API or Whapi — and the bot stays 100% yours: export the full code, no lock-in. 40+ blocks, templates, live simulator.",
   h1: "The free WhatsApp bot builder that lets you keep the code",
   body: `
 <div class="hero">
   <div>
     <h1>Build a WhatsApp bot as a flowchart — free, no code</h1>
+    <p class="ownline">Any provider's API — a bot that's <strong>100% yours</strong>.</p>
     <p class="lead">Drag blocks onto a canvas, wire them together, test the conversation in a live simulator, and go live on Meta's WhatsApp Cloud API, Twilio, Green API or Whapi.cloud. When you're done, export the complete bot as runnable Node.js code — it's yours.</p>
     <a class="cta big" href="/app">Open the free builder</a>
     <p class="sub">No signup needed to try it · Nothing to install · Works in your browser</p>
   </div>
   <div>${HERO_SVG}</div>
 </div>
+
+<section>
+  <div class="ownbanner">
+    <div>
+      <div class="ownbig">🔑 The API can be anyone's. The bot is 100% yours.</div>
+      <p>Plug in Meta, Twilio, Green API or Whapi.cloud — your choice, your account. FlowBot never sits between you and your customers, and you can <a href="/export-whatsapp-bot-code">export the complete source code</a> any time. No lock-in, no monthly platform fee, no one holding your bot hostage.</p>
+    </div>
+  </div>
+</section>
 
 <section>
   <h2>Everything a WhatsApp business bot needs, as drag-and-drop blocks</h2>
