@@ -185,6 +185,28 @@ function missingVar(node, vars) {
     const f = c.field || "value";
     if (vars[f] === undefined && !own.has(f)) return f;
   }
+  // custom blocks: auto-collect {vars} referenced by steps that no step in the
+  // block ever provides itself — same convenience plain blocks already get, so
+  // {name} & co. get asked up front instead of printing literally (or being
+  // pulled in confusingly by a later plain block).
+  if (node.type === "custom" && Array.isArray(c.steps)) {
+    const provided = new Set();
+    for (const s of c.steps) {
+      if (s.kind === "ask" || s.kind === "set") provided.add(s.field || "value");
+      if (s.kind === "api") provided.add(s.field || "apiResult").add((s.field || "apiResult") + "_error");
+    }
+    const STEP_SCAN = ["message", "question", "value", "url", "body", "prompt", "successMessage", "errorMessage", "greeting", "context", "ack"];
+    const scan = (str) => {
+      if (typeof str !== "string") return null;
+      for (const m of str.matchAll(/\{(\w+)\}/g)) if (vars[m[1]] === undefined && !provided.has(m[1])) return m[1];
+      return null;
+    };
+    for (const s of c.steps) {
+      for (const key of STEP_SCAN) { const hit = scan(s[key]); if (hit) return hit; }
+      if (Array.isArray(s.options)) for (const o of s.options) { const hit = scan(o); if (hit) return hit; }
+      if (Array.isArray(s.headers)) for (const h of s.headers) { const hit = scan(h?.key) || scan(h?.value); if (hit) return hit; }
+    }
+  }
   return null;
 }
 

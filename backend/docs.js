@@ -195,6 +195,7 @@ const DOCS = [
 
 <h2>Auto-collect: missing variables ask for themselves</h2>
 <p>If a block is about to show a <code>{var}</code> nobody collected yet, the bot pauses and asks for it first — <em>"Before we continue — please share your delivery address:"</em> — saves the answer under that name, then runs the block as intended. This means you can reference <code>{name}</code> in a Booking Confirm without wiring a Collect block first; the engine fills the gap. The same applies to a Condition block on an unset variable: it asks instead of silently branching false.</p>
+<p>Custom blocks get the same treatment: a <code>{var}</code> used in a <a href="/docs/block-lab">Block Lab</a> step is auto-collected up front <em>unless another step in that same block provides it</em> (an <em>ask</em> or <em>set</em> step, or an API step's saved result). So a "say" step reading <em>"Hey {name}!"</em> asks for the name before greeting, while a variable the block asks for later is left for that step to collect.</p>
 
 <h2>Branching on variables</h2>
 <p>The <strong>Condition</strong> block compares a variable to a value with <em>equals</em> or <em>contains</em> (both case-insensitive) and branches: port 0 when true, port 1 when false. Combine with menu choices — e.g. after a menu, <code>{choice}</code> contains "veg" → route to the vegetarian menu.</p>
