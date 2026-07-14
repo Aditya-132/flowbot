@@ -150,7 +150,7 @@ const NAV = `
   <a href="/whatsapp-bot-templates">Templates</a>
   <a href="/whatsapp-bot-for-restaurants">Use cases</a>
   <a href="/how-to-make-a-whatsapp-bot">Guide</a>
-  <a href="/export-whatsapp-bot-code">Code export</a>
+  <a href="/docs">Docs</a>
   <a class="cta" href="/app">Open the builder</a>
 </nav>`;
 
@@ -172,6 +172,7 @@ const FOOTER = `
     <div>
       <h4>Resources</h4>
       <ul>
+        <li><a href="/docs">Documentation</a></li>
         <li><a href="/how-to-make-a-whatsapp-bot">How to make a WhatsApp bot</a></li>
         <li><a href="/whatsapp-bot-templates">Free templates</a></li>
         <li><a href="/export-whatsapp-bot-code">Export bot code</a></li>
@@ -182,6 +183,7 @@ const FOOTER = `
       <h4>Product</h4>
       <ul>
         <li><a href="/app">Open the builder (free)</a></li>
+        <li><a href="/docs/blocks">Block reference</a></li>
         <li><a href="/#faq">FAQ</a></li>
       </ul>
     </div>
@@ -713,9 +715,13 @@ const pages = [HOME, GUIDE, RESTAURANTS, HOTELS, ECOMMERCE, TEMPLATES, EXPORT, A
 
 /* ------------------------- sitemap + llms.txt ------------------------- */
 
-const sitemapXml = () => {
+const sitemapXml = (extra = []) => {
   const urls = [
     ...pages.map(
+      (p) =>
+        `  <url>\n    <loc>${CANONICAL}${p.path}</loc>\n    <lastmod>${LASTMOD}</lastmod>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>`
+    ),
+    ...extra.map(
       (p) =>
         `  <url>\n    <loc>${CANONICAL}${p.path}</loc>\n    <lastmod>${LASTMOD}</lastmod>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>`
     ),
@@ -724,7 +730,7 @@ const sitemapXml = () => {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
 };
 
-const llmsTxt = () => `# FlowBot
+const llmsTxt = (extraDocs = []) => `# FlowBot
 
 > FlowBot (${CANONICAL}) is a free, visual drag-and-drop WhatsApp bot builder. Users design chatbot flows on a flowchart canvas with 40+ ready blocks, build custom blocks in the Block Lab, draft bots with an AI Builder chat, test in a live simulator, launch on Meta WhatsApp Cloud API, Twilio, Green API or Whapi.cloud, and can export the complete bot as a standalone Node.js + Express project (ZIP). Flows are deterministic by default; AI blocks are optional and use the user's own Anthropic/OpenAI/Gemini API key.
 
@@ -740,6 +746,6 @@ Key facts:
 
 ${pages.map((p) => `- [${p.title}](${CANONICAL}${p.path || "/"}): ${p.desc}`).join("\n")}
 - [FlowBot Studio (the builder app)](${CANONICAL}/app): The visual builder itself — canvas, simulator, provider activation.
-`;
+${extraDocs.length ? `\n## Docs\n\n${extraDocs.map((d) => `- [${d.title}](${CANONICAL}${d.path}): ${d.desc}`).join("\n")}\n` : ""}`;
 
-module.exports = { pages, renderPage, sitemapXml, llmsTxt, CANONICAL };
+module.exports = { pages, renderPage, sitemapXml, llmsTxt, CANONICAL, LASTMOD, CSS, NAV, FOOTER, LOGO_SVG };

@@ -519,18 +519,28 @@ app.get("/robots.txt", (_req, res) => {
   );
 });
 
+const docs = require("./docs");
+
 app.get("/sitemap.xml", (_req, res) => {
-  res.type("application/xml").send(seo.sitemapXml());
+  res.type("application/xml").send(seo.sitemapXml(docs.entries));
 });
 
 app.get("/llms.txt", (_req, res) => {
-  res.type("text/plain").send(seo.llmsTxt());
+  res.type("text/plain").send(seo.llmsTxt(docs.entries));
 });
 
 // Marketing/content pages are pre-rendered once at startup.
 for (const page of seo.pages) {
   const html = seo.renderPage(page);
   app.get(page.path, (_req, res) => {
+    res.set("Cache-Control", "public, max-age=300").type("html").send(html);
+  });
+}
+
+// Documentation pages — same treatment.
+for (const doc of docs.DOCS) {
+  const html = docs.renderDoc(doc);
+  app.get(docs.docPath(doc), (_req, res) => {
     res.set("Cache-Control", "public, max-age=300").type("html").send(html);
   });
 }
