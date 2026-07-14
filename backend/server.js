@@ -28,20 +28,19 @@ app.use(express.urlencoded({ extended: false })); // Twilio posts urlencoded
 // async route wrapper → any thrown/rejected error hits the error middleware
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// In-memory chat sessions: key = botId + "|" + phone.
-// Idle sessions expire so the map can't grow without bound.
-const SESSION_TTL_MS = 60 * 60 * 1000;
-const sessions = new Map();
-const getSession = (key) => {
-  if (!sessions.has(key)) sessions.set(key, { state: null, vars: {} });
-  const s = sessions.get(key);
-  s.lastSeen = Date.now();
-  return s;
-};
-setInterval(() => {
-  const cutoff = Date.now() - SESSION_TTL_MS;
-  for (const [key, s] of sessions) if ((s.lastSeen || 0) < cutoff) sessions.delete(key);
-}, 10 * 60 * 1000).unref();
+// Chat sessions persist in Postgres (key = botId + "|" + sender), so live
+// conversations survive restarts and deploys. runBot handles one incoming
+// message end-to-end: load session → engine → save session → log an
+// analytics event (the simulator is excluded from analytics).
+async function runBot(flow, channel, from, text) {
+  const key = `${flow.id}|${from}`;
+  const session = (await store.getChatSession(key)) || { state: null, vars: {} };
+  const replies = await handleMessage(flow, text, session);
+  await store.saveChatSession(key, flow.id, session);
+  if (channel !== "simulator") store.logEvent(flow.id, channel, key, replies.length).catch(() => {});
+  return replies;
+}
+setInterval(() => store.cleanupChatSessions(12).catch(() => {}), 10 * 60 * 1000).unref();
 
 const NODE_LIMIT = 150;
 const STEP_KINDS = new Set(["say", "ask", "set", "api", "ai", "choice"]);
@@ -280,10 +279,9 @@ app.post("/api/flows/:id/simulate", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
   if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
   const from = req.body.from || "simulator";
-  const key = `${f.id}|${from}`;
-  if (req.body.reset) sessions.delete(key);
+  if (req.body.reset) await store.deleteChatSession(`${f.id}|${from}`);
   if (req.body.message === undefined) return res.json({ replies: [] });
-  const replies = await handleMessage(f, req.body.message, getSession(key));
+  const replies = await runBot(f, "simulator", from, req.body.message);
   res.json({ replies });
 }));
 
@@ -315,7 +313,7 @@ app.post("/whatsapp/:id", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
   if (!f || !f.active || f.provider !== "twilio") return res.type("text/xml").send(twiml(["This bot is not active."]));
   const from = req.body.From || "unknown";
-  const replies = await handleMessage(f, req.body.Body || "", getSession(`${f.id}|${from}`));
+  const replies = await runBot(f, "twilio", from, req.body.Body || "");
   res.type("text/xml").send(twiml(replies));
 }));
 
@@ -338,7 +336,7 @@ app.post("/meta/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "meta" || !f.meta) return res.sendStatus(200); // always 200 so Meta doesn't retry forever
   const incoming = metaApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200); // delivery/read status events — nothing to do
-  const replies = await handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
+  const replies = await runBot(f, "meta", incoming.from, incoming.text);
   for (const msg of replies) {
     try {
       await metaApi.sendText(f.meta, incoming.from, msg);
@@ -356,7 +354,7 @@ app.post("/green/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "green" || !f.green) return res.sendStatus(200);
   const incoming = greenApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
-  const replies = await handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
+  const replies = await runBot(f, "green", incoming.from, incoming.text);
   for (const msg of replies) {
     try {
       await greenApi.sendText(f.green, incoming.from, msg);
@@ -374,7 +372,7 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "whapi" || !f.whapi) return res.sendStatus(200);
   const incoming = whapi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
-  const replies = await handleMessage(f, incoming.text, getSession(`${f.id}|${incoming.from}`));
+  const replies = await runBot(f, "whapi", incoming.from, incoming.text);
   for (const msg of replies) {
     try {
       await whapi.sendText(f.whapi, incoming.from, msg);
@@ -383,6 +381,107 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
     }
   }
   res.sendStatus(200);
+}));
+
+/* ------------------- Public bot surfaces: widget embed, chat page, share page ------------------- */
+const widgetPages = require("./widget");
+const { CANONICAL } = require("./seo");
+
+// enable/disable the public surfaces; the key is generated once and reused
+app.post("/api/flows/:id/publish", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const b = req.body || {};
+  const saved = await store.setPublic(f.id, {
+    publicKey: f.publicKey || crypto.randomBytes(9).toString("base64url"),
+    widgetEnabled: typeof b.widget === "boolean" ? b.widget : undefined,
+    shareEnabled: typeof b.share === "boolean" ? b.share : undefined,
+  });
+  res.json({ publicKey: saved.publicKey, widgetEnabled: saved.widgetEnabled, shareEnabled: saved.shareEnabled });
+}));
+
+// owner analytics: last-30-day totals, daily series, channel breakdown
+app.get("/api/flows/:id/analytics", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  res.json(await store.analytics(f.id, 30));
+}));
+
+// naive per-key+IP rate limit for the public chat API: 20 messages / 30s
+const chatBuckets = new Map();
+const chatAllowed = (k) => {
+  const now = Date.now();
+  const recent = (chatBuckets.get(k) || []).filter((t) => now - t < 30000);
+  if (recent.length >= 20) return false;
+  recent.push(now);
+  chatBuckets.set(k, recent);
+  return true;
+};
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, b] of chatBuckets) if (!b.some((t) => now - t < 30000)) chatBuckets.delete(k);
+}, 60000).unref();
+
+app.post("/api/public/:key/chat", wrap(async (req, res) => {
+  const f = await store.getByPublicKey(req.params.key);
+  if (!f || (!f.widgetEnabled && !f.shareEnabled)) return res.status(404).json({ error: "bot not found" });
+  const sid = String(req.body.sessionId || "");
+  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(sid)) return res.status(400).json({ error: "invalid session" });
+  const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+  if (!chatAllowed(`${req.params.key}|${ip}`)) return res.status(429).json({ error: "Too many messages — please slow down." });
+  const from = `web:${sid}`;
+  if (req.body.reset) await store.deleteChatSession(`${f.id}|${from}`);
+  const replies = await runBot(f, "widget", from, String(req.body.message ?? "").slice(0, 1000));
+  res.json({ replies });
+}));
+
+// flow JSON for "clone this bot" — secrets never leave the server:
+// BYOK AI keys are blanked, API header values dropped, URL queries stripped
+const sanitizeFlowForShare = (f) => {
+  const nodes = JSON.parse(JSON.stringify(f.nodes || []));
+  const stripUrl = (u) => { try { const x = new URL(u); return x.origin + x.pathname; } catch { return u; } };
+  const scrubApi = (c) => {
+    if (Array.isArray(c.headers)) c.headers = c.headers.map((h) => ({ key: h?.key || "", value: "" }));
+    if (c.url) c.url = stripUrl(c.url);
+    if (c.body) c.body = "";
+  };
+  for (const n of nodes) {
+    const c = n.config || {};
+    if (n.type === "ai_reply") c.apiKey = "";
+    if (n.type === "http_request") scrubApi(c);
+    if (n.type === "custom" && Array.isArray(c.steps)) {
+      for (const s of c.steps) {
+        if (s.kind === "ai") s.apiKey = "";
+        if (s.kind === "api") scrubApi(s);
+      }
+    }
+  }
+  return { name: f.name, nodes, edges: f.edges || [] };
+};
+
+app.get("/api/share/:key/flow", wrap(async (req, res) => {
+  const f = await store.getByPublicKey(req.params.key);
+  if (!f || !f.shareEnabled) return res.status(404).json({ error: "not found" });
+  res.json(sanitizeFlowForShare(f));
+}));
+
+app.get("/widget.js", (_req, res) => {
+  res.type("application/javascript").set("Cache-Control", "public, max-age=3600")
+    .send(widgetPages.renderWidgetJs(CANONICAL));
+});
+
+const publicGoneHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bot not available — FlowBot</title><meta name="robots" content="noindex"><style>body{font-family:system-ui,sans-serif;background:#f4f8f5;color:#17301f;display:grid;place-items:center;min-height:100vh;margin:0}main{text-align:center;padding:24px}a{color:#0e7a4b}</style></head><body><main><h1>This bot isn't available</h1><p>The owner may have unpublished it. <a href="/">Build your own WhatsApp bot free →</a></p></main></body></html>`;
+
+app.get("/chat/:key", wrap(async (req, res) => {
+  const f = await store.getByPublicKey(req.params.key);
+  if (!f || (!f.widgetEnabled && !f.shareEnabled)) return res.status(404).type("html").send(publicGoneHtml);
+  res.type("html").send(widgetPages.renderChatPage(f, req.params.key, CANONICAL));
+}));
+
+app.get("/share/:key", wrap(async (req, res) => {
+  const f = await store.getByPublicKey(req.params.key);
+  if (!f || !f.shareEnabled) return res.status(404).type("html").send(publicGoneHtml);
+  res.type("html").send(widgetPages.renderSharePage(f, req.params.key, CANONICAL));
 }));
 
 app.get("/api/health", wrap(async (_req, res) => {

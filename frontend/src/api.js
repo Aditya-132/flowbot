@@ -37,6 +37,9 @@ export const api = {
   updateFlow: (id, body) => send(`/api/flows/${id}`, "PUT", body).then(j),
   deleteFlow: (id) => fetch(`/api/flows/${id}`, { method: "DELETE", headers: headers() }).then(j),
   activate: (id, creds) => send(`/api/flows/${id}/activate`, "POST", creds).then(j),
+  publish: (id, body) => send(`/api/flows/${id}/publish`, "POST", body).then(j),
+  analytics: (id) => get(`/api/flows/${id}/analytics`).then(j),
+  getSharedFlow: (key) => fetch(`/api/share/${key}/flow`).then(j),
   simulate: (id, payload) => send(`/api/flows/${id}/simulate`, "POST", payload).then(j),
   getCode: (id) => get(`/api/flows/${id}/code`).then((r) => r.text()),
   getCodeZip: (id) =>

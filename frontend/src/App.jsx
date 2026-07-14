@@ -462,6 +462,45 @@ function Builder({ user, onAuthed, onLogout }) {
     setTourStep(null);
     try { localStorage.setItem("flowbot_tour_done", "1"); } catch { /* private mode */ }
   };
+
+  /* ---------- Share & Embed: website widget + public share page + analytics ---------- */
+  const [sharePanel, setSharePanel] = useState(false);
+  const [shareInfo, setShareInfo] = useState(null); // {publicKey, widgetEnabled, shareEnabled}
+  const [shareStats, setShareStats] = useState(null);
+
+  // /app?clone=KEY — load a publicly shared bot onto the canvas as a copy
+  useEffect(() => {
+    const key = new URLSearchParams(window.location.search).get("clone");
+    if (!key) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    api.getSharedFlow(key).then((f) => {
+      const loadedNodes = (f.nodes || []).filter((n) => NODE_TYPES[n.type] || n.type === "custom");
+      const ids = new Set(loadedNodes.map((n) => n.id));
+      setBotId(null);
+      setBotName(((f.name || "Shared bot") + " (copy)").slice(0, 60));
+      setNodes(loadedNodes);
+      setEdges((f.edges || []).filter((e) => ids.has(e.from) && ids.has(e.to)));
+      setActivated(false); setActivation(null);
+      setDirty(true); setSel(null); setChat([]); setTab(0);
+      flash("⚡ Bot cloned onto your canvas — hit Save to keep it");
+    }).catch(() => flash("Could not load that shared bot — the link may be unpublished", true));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function openShare() {
+    if (!userRef.current) { needAuth(openShare); return; }
+    const id = await ensureSaved();
+    if (!id) return;
+    setSharePanel(true); setShareInfo(null); setShareStats(null);
+    try { setShareInfo(await api.publish(id, {})); }
+    catch (e) { setSharePanel(false); flash("Could not load sharing info: " + e.message, true); return; }
+    api.analytics(id).then(setShareStats).catch(() => {});
+  }
+  async function togglePublic(what, value) {
+    try { setShareInfo(await api.publish(botId, { [what]: value })); }
+    catch (e) { flash("Update failed: " + e.message, true); }
+  }
+  const copyText = (text, label) =>
+    navigator.clipboard?.writeText(text).then(() => flash("📋 " + label + " copied"), () => flash("Copy failed — select the text and copy manually", true));
   const pendingAuth = useRef(null); // action to resume after a successful login
   const userRef = useRef(user);
   const canvasRef = useRef(null);
@@ -894,6 +933,10 @@ function Builder({ user, onAuthed, onLogout }) {
           <button data-tour="ai-builder" style={{ ...S.primaryBtn, padding: "8px 14px", fontSize: 12.5 }} onClick={() => setAiPanel((v) => !v)}>
             ✨ AI Builder
           </button>
+          <button style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5 }} onClick={openShare}
+            title="Website widget, public share link & analytics">
+            📣 Share
+          </button>
           <div data-tour="tabs" style={{ display: "flex", gap: 6 }}>
             {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
               <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
@@ -974,6 +1017,94 @@ function Builder({ user, onAuthed, onLogout }) {
               onKeyDown={(e) => e.key === "Enter" && askAssistant()} />
             <button style={{ ...S.primaryBtn, borderRadius: 20, padding: "8px 16px", opacity: aiBusy || !aiInput.trim() ? 0.5 : 1 }}
               disabled={aiBusy || !aiInput.trim()} onClick={askAssistant}>➤</button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ SHARE & EMBED: website widget, share page, analytics ============ */}
+      {sharePanel && (
+        <div style={S.overlay} onClick={() => setSharePanel(false)}>
+          <div style={{ background: "#ffffff", borderRadius: 16, padding: 20, width: "min(600px, 94vw)", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 80px rgba(15,23,42,.3)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>📣 Share &amp; Embed — {botName}</div>
+              <button style={S.miniBtn} onClick={() => setSharePanel(false)}>✕ close</button>
+            </div>
+            {!shareInfo ? (
+              <div style={{ padding: 30, textAlign: "center", color: "#64748b", fontSize: 13 }}>Loading…</div>
+            ) : (() => {
+              const origin = window.location.origin;
+              const snippet = `<script src="${origin}/widget.js" data-flowbot="${shareInfo.publicKey}" async></` + "script>";
+              const shareUrl = `${origin}/share/${shareInfo.publicKey}`;
+              const chatUrl = `${origin}/chat/${shareInfo.publicKey}`;
+              const maxDaily = shareStats ? Math.max(...shareStats.daily.map((d) => d.messages), 1) : 1;
+              return (<>
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, marginTop: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: 13.5 }}>🌐 Website chat widget</div>
+                      <div style={{ fontSize: 11.5, color: "#64748b" }}>A chat bubble on your own website that runs this exact flow — no WhatsApp needed.</div>
+                    </div>
+                    <Toggle on={!!shareInfo.widgetEnabled} onChange={(v) => togglePublic("widget", v)} />
+                  </div>
+                  {shareInfo.widgetEnabled && (<>
+                    <div style={{ fontSize: 11.5, color: "#64748b", margin: "10px 0 4px" }}>Paste this just before &lt;/body&gt; on your site:</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input readOnly style={{ ...S.input, flex: 1, fontFamily: "monospace", fontSize: 11 }} value={snippet} onFocus={(e) => e.target.select()} />
+                      <button style={S.ghostBtn} onClick={() => copyText(snippet, "Embed code")}>Copy</button>
+                    </div>
+                    <div style={{ fontSize: 11.5, marginTop: 8 }}>
+                      Preview the chat: <a href={chatUrl} target="_blank" rel="noreferrer">{chatUrl}</a>
+                    </div>
+                  </>)}
+                </div>
+
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, marginTop: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: 13.5 }}>🔗 Public share page</div>
+                      <div style={{ fontSize: 11.5, color: "#64748b" }}>Anyone with the link sees your flowchart, chats with the bot live, and can clone it (your API keys are never included).</div>
+                    </div>
+                    <Toggle on={!!shareInfo.shareEnabled} onChange={(v) => togglePublic("share", v)} />
+                  </div>
+                  {shareInfo.shareEnabled && (
+                    <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                      <input readOnly style={{ ...S.input, flex: 1, fontSize: 11.5 }} value={shareUrl} onFocus={(e) => e.target.select()} />
+                      <button style={S.ghostBtn} onClick={() => copyText(shareUrl, "Share link")}>Copy</button>
+                      <a href={shareUrl} target="_blank" rel="noreferrer" style={{ ...S.ghostBtn, textDecoration: "none", display: "inline-block" }}>Open</a>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, marginTop: 12 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8 }}>📊 Last 30 days</div>
+                  {!shareStats ? (
+                    <div style={{ fontSize: 12, color: "#64748b" }}>Loading…</div>
+                  ) : shareStats.totals.messages_in === 0 ? (
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      No conversations yet. They'll show up here once people talk to your bot — on WhatsApp, the website widget or your share page.
+                    </div>
+                  ) : (<>
+                    <div style={{ display: "flex", gap: 22, flexWrap: "wrap", fontSize: 11.5, color: "#64748b" }}>
+                      <div><b style={{ fontSize: 19, color: "#0f172a" }}>{shareStats.totals.conversations}</b><br />conversations</div>
+                      <div><b style={{ fontSize: 19, color: "#0f172a" }}>{shareStats.totals.messages_in}</b><br />messages received</div>
+                      <div><b style={{ fontSize: 19, color: "#0f172a" }}>{shareStats.totals.messages_out}</b><br />replies sent</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 46, marginTop: 12 }}>
+                      {shareStats.daily.map((d) => (
+                        <div key={d.day} title={`${d.day}: ${d.messages} messages, ${d.conversations} conversations`}
+                          style={{ flex: 1, minWidth: 3, background: "#25D366", borderRadius: 2, height: Math.max(3, Math.round(44 * d.messages / maxDaily)) }} />
+                      ))}
+                    </div>
+                    {shareStats.channels.length > 0 && (
+                      <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 8 }}>
+                        {shareStats.channels.map((c) => `${c.channel}: ${c.messages}`).join(" · ")}
+                      </div>
+                    )}
+                  </>)}
+                </div>
+              </>);
+            })()}
           </div>
         </div>
       )}
@@ -1837,6 +1968,14 @@ function HeadersEditor({ value, onChange }) {
       ))}
       <button style={styles.addBtn} onClick={() => onChange([...value, { key: "", value: "" }])}>+ Add header</button>
     </div>
+  );
+}
+function Toggle({ on, onChange }) {
+  return (
+    <button onClick={() => onChange(!on)} aria-pressed={on}
+      style={{ width: 46, height: 26, borderRadius: 999, border: "none", cursor: "pointer", background: on ? "#25D366" : "#cbd5e1", position: "relative", transition: "background .15s", flex: "none" }}>
+      <span style={{ position: "absolute", top: 3, left: on ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }} />
+    </button>
   );
 }
 function Trunc({ text }) {

@@ -77,6 +77,9 @@ const appJsonLd = {
     "Meta Cloud API, Twilio, Green API and Whapi.cloud integrations",
     "HTTP Request block to call any external API",
     "Optional AI Reply block with your own Anthropic / OpenAI / Gemini key",
+    "Embeddable website chat widget (same flow, no WhatsApp needed)",
+    "Public share pages — let anyone try your bot live and clone it",
+    "Per-bot analytics: conversations, messages, channels",
     "Full bot code export as ZIP (Node.js + Express)",
   ],
 };
@@ -286,6 +289,8 @@ const HOME = {
     <div class="card"><h3>🔌 Four providers</h3><p>One-click activation on Meta WhatsApp Cloud API, Twilio, Green API or Whapi.cloud. Webhooks are set up for you.</p></div>
     <div class="card"><h3>📦 Code export</h3><p>Download your entire bot as a ZIP of clean Node.js + Express code. Run it on your own server forever — no lock-in, no subscription.</p></div>
     <div class="card"><h3>🎯 Deterministic by default</h3><p>Flows run exactly as drawn — no AI guessing in the middle of your checkout. Add AI only where you want it, using your own Anthropic, OpenAI or Gemini key.</p></div>
+    <div class="card"><h3>🌐 Website chat widget</h3><p>Paste one script tag and the same bot runs as a chat bubble on your own website — no WhatsApp account needed to get value on day one.</p></div>
+    <div class="card"><h3>📊 Built-in analytics</h3><p>See conversations, messages and channels for every bot over the last 30 days — right inside the builder.</p></div>
   </div>
 </section>
 
@@ -342,6 +347,10 @@ const HOME = {
     {
       q: "Can I try it without creating an account?",
       a: "Yes. Guest mode lets you build and simulate bots without signing up. You only need an account when you want to save bots to the cloud or activate a live WhatsApp connection.",
+    },
+    {
+      q: "Can I put the same bot on my website?",
+      a: "Yes — every bot can be embedded as a website chat widget with a single script tag. The bubble runs the exact same flow as your WhatsApp bot, so you can serve web visitors before you even connect a WhatsApp provider. You can also publish a share page where anyone can try your bot live and clone it.",
     },
   ],
 };
@@ -723,6 +732,8 @@ Key facts:
 - Price: free (users pay only their WhatsApp provider's message costs)
 - No signup needed to try (guest mode)
 - Unique feature: full source-code export — no lock-in
+- Bots also run as an embeddable website chat widget (one script tag) and get public share pages others can try live and clone
+- Built-in per-bot analytics (conversations, messages, channels)
 - Templates: restaurant, hotel (77 blocks), online store, bank, chess academy
 
 ## Pages

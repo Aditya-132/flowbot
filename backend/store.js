@@ -66,6 +66,35 @@ async function init() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+
+  // public exposure: one key serves both the website widget and the share page
+  await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS public_key TEXT UNIQUE;`);
+  await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS widget_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS share_enabled BOOLEAN NOT NULL DEFAULT false;`);
+
+  // chat sessions persist across restarts/deploys (were in-memory before)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+      key       TEXT PRIMARY KEY,
+      bot_id    TEXT NOT NULL,
+      data      JSONB NOT NULL DEFAULT '{}',
+      last_seen TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS chat_sessions_seen ON chat_sessions (last_seen);`);
+
+  // one row per handled incoming message — powers per-bot analytics
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bot_events (
+      id          BIGSERIAL PRIMARY KEY,
+      bot_id      TEXT NOT NULL,
+      channel     TEXT NOT NULL,
+      session_key TEXT,
+      out_count   INT NOT NULL DEFAULT 0,
+      ts          TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS bot_events_bot_ts ON bot_events (bot_id, ts);`);
 }
 
 const rowToFlow = (r) =>
@@ -82,6 +111,9 @@ const rowToFlow = (r) =>
     active: r.active,
     userId: r.user_id,
     updatedAt: r.updated_at,
+    publicKey: r.public_key,
+    widgetEnabled: r.widget_enabled,
+    shareEnabled: r.share_enabled,
   };
 
 module.exports = {
@@ -145,6 +177,83 @@ module.exports = {
 
   remove: async (id) => {
     await pool.query(`DELETE FROM flows WHERE id = $1`, [id]);
+    await pool.query(`DELETE FROM chat_sessions WHERE bot_id = $1`, [id]);
+    await pool.query(`DELETE FROM bot_events WHERE bot_id = $1`, [id]);
+  },
+
+  /* ---------- public exposure (widget embed + share page) ---------- */
+  getByPublicKey: async (key) => {
+    const { rows } = await pool.query(`SELECT * FROM flows WHERE public_key = $1`, [key]);
+    return rowToFlow(rows[0]);
+  },
+
+  setPublic: async (id, { publicKey, widgetEnabled, shareEnabled }) => {
+    const { rows } = await pool.query(
+      `UPDATE flows SET
+         public_key     = COALESCE($2, public_key),
+         widget_enabled = COALESCE($3, widget_enabled),
+         share_enabled  = COALESCE($4, share_enabled)
+       WHERE id = $1 RETURNING *`,
+      [id, publicKey ?? null, widgetEnabled ?? null, shareEnabled ?? null]
+    );
+    return rowToFlow(rows[0]);
+  },
+
+  /* ---------- chat sessions (persist across restarts) ---------- */
+  getChatSession: async (key) => {
+    const { rows } = await pool.query(
+      `UPDATE chat_sessions SET last_seen = now() WHERE key = $1 RETURNING data`,
+      [key]
+    );
+    return rows[0] ? rows[0].data : null;
+  },
+
+  saveChatSession: async (key, botId, data) => {
+    await pool.query(
+      `INSERT INTO chat_sessions (key, bot_id, data, last_seen) VALUES ($1, $2, $3, now())
+       ON CONFLICT (key) DO UPDATE SET data = $3, last_seen = now()`,
+      [key, botId, JSON.stringify(data)]
+    );
+  },
+
+  deleteChatSession: async (key) => {
+    await pool.query(`DELETE FROM chat_sessions WHERE key = $1`, [key]);
+  },
+
+  cleanupChatSessions: async (ttlHours = 12) => {
+    await pool.query(`DELETE FROM chat_sessions WHERE last_seen < now() - ($1 || ' hours')::interval`, [ttlHours]);
+  },
+
+  /* ---------- analytics events ---------- */
+  logEvent: async (botId, channel, sessionKey, outCount) => {
+    await pool.query(
+      `INSERT INTO bot_events (bot_id, channel, session_key, out_count) VALUES ($1, $2, $3, $4)`,
+      [botId, channel, sessionKey, outCount]
+    );
+  },
+
+  analytics: async (botId, days = 30) => {
+    const params = [botId, String(days)];
+    const totals = await pool.query(
+      `SELECT COUNT(*)::int AS messages_in, COALESCE(SUM(out_count),0)::int AS messages_out,
+              COUNT(DISTINCT session_key)::int AS conversations
+       FROM bot_events WHERE bot_id = $1 AND ts > now() - ($2 || ' days')::interval`,
+      params
+    );
+    const daily = await pool.query(
+      `SELECT to_char(date_trunc('day', ts), 'YYYY-MM-DD') AS day,
+              COUNT(*)::int AS messages, COUNT(DISTINCT session_key)::int AS conversations
+       FROM bot_events WHERE bot_id = $1 AND ts > now() - ($2 || ' days')::interval
+       GROUP BY 1 ORDER BY 1`,
+      params
+    );
+    const channels = await pool.query(
+      `SELECT channel, COUNT(*)::int AS messages
+       FROM bot_events WHERE bot_id = $1 AND ts > now() - ($2 || ' days')::interval
+       GROUP BY channel ORDER BY messages DESC`,
+      params
+    );
+    return { totals: totals.rows[0], daily: daily.rows, channels: channels.rows };
   },
 
   /* ---------- custom feature blocks (Block Lab) ---------- */
