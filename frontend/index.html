@@ -4,60 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Primary SEO -->
-    <title>FlowBot — Free WhatsApp Bot Builder | Drag & Drop Chatbot Maker (No Code, No AI)</title>
-    <meta name="description" content="Build WhatsApp chatbots visually with FlowBot: drag-and-drop flowchart builder, 39+ ready blocks, custom Block Lab, ready templates for restaurants, banks, hotels & stores. Test in a live simulator, go live with Meta Cloud API, Twilio, Green API or Whapi, or export your bot's full code as a ZIP. Free & deterministic — no AI black box." />
-    <meta name="keywords" content="whatsapp bot builder, whatsapp chatbot maker, no code chatbot, drag and drop bot builder, whatsapp automation, whatsapp business api bot, flowchart chatbot, free whatsapp bot, meta cloud api bot, twilio whatsapp bot, chatbot templates, restaurant whatsapp bot, hotel whatsapp bot, whatsapp bot code export" />
+    <!-- Primary SEO (the marketing pages live at /; this app shell is served at /app) -->
+    <title>FlowBot Studio — Build a WhatsApp Bot Free | Drag & Drop Canvas</title>
+    <meta name="description" content="The FlowBot builder: drag 40+ blocks onto a canvas, wire your WhatsApp bot's conversation, test it in a live simulator, launch on Meta Cloud API, Twilio, Green API or Whapi — or export the full code as a ZIP. Free, works without signup." />
     <meta name="author" content="Aditya Chincholkar" />
     <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#25D366" />
     <meta name="application-name" content="FlowBot" />
-    <link rel="canonical" href="https://flochatbot.com/" />
-    
+    <link rel="canonical" href="https://flochatbot.com/app" />
+
 
     <!-- Icons + PWA -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Open Graph (WhatsApp, Facebook, LinkedIn previews) -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="FlowBot" />
-    <meta property="og:title" content="FlowBot — Free WhatsApp Bot Builder (No Code, No AI)" />
-    <meta property="og:description" content="Design your WhatsApp bot as a flowchart, test it in a live simulator, launch on Meta / Twilio / Green API / Whapi — or download the complete bot code as a ZIP. 38+ blocks, hotel/restaurant/bank/store templates, and a Block Lab to invent your own blocks." />
-    <meta property="og:url" content="https://flochatbot.com/" />
-    <meta property="og:image" content="https://flochatbot.com/og-image.svg" />
+    <meta property="og:title" content="FlowBot Studio — Build a WhatsApp Bot Free (Drag & Drop)" />
+    <meta property="og:description" content="Design your WhatsApp bot as a flowchart, test it in a live simulator, launch on Meta / Twilio / Green API / Whapi — or download the complete bot code as a ZIP. 40+ blocks, ready templates, and a Block Lab to invent your own blocks." />
+    <meta property="og:url" content="https://flochatbot.com/app" />
+    <meta property="og:image" content="https://flochatbot.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="en_IN" />
 
     <!-- Twitter / X card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="FlowBot — Free WhatsApp Bot Builder (No Code, No AI)" />
-    <meta name="twitter:description" content="Drag-and-drop WhatsApp chatbot builder with 38+ blocks, ready templates, live simulator, one-click provider hookup and full code export as ZIP." />
-    <meta name="twitter:image" content="https://flochatbot.com/og-image.svg" />
+    <meta name="twitter:title" content="FlowBot Studio — Build a WhatsApp Bot Free (Drag & Drop)" />
+    <meta name="twitter:description" content="Drag-and-drop WhatsApp chatbot builder with 40+ blocks, ready templates, live simulator, one-click provider hookup and full code export as ZIP." />
+    <meta name="twitter:image" content="https://flochatbot.com/og-image.png" />
 
-    <!-- Structured data -->
+    <!-- Structured data: breadcrumb back to the marketing home, which carries
+         the canonical SoftwareApplication/Organization markup -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "FlowBot",
-      "applicationCategory": "BusinessApplication",
-      "applicationSubCategory": "Chatbot Builder",
-      "operatingSystem": "Web",
-      "url": "https://flochatbot.com/",
-      "description": "Visual drag-and-drop WhatsApp bot builder. Design chatbot flows on a canvas, test them in a live simulator, activate on Meta WhatsApp Cloud API, Twilio, Green API or Whapi.cloud, or export the complete standalone bot code as a ZIP. Deterministic runtime with no AI.",
-      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
-      "featureList": [
-        "Drag & drop flowchart bot designer",
-        "39+ ready-made WhatsApp feature blocks",
-        "Block Lab — build your own custom blocks from steps",
-        "Ready templates: restaurant, bank, hotel, chess academy, online store",
-        "Live chat simulator",
-        "Meta Cloud API, Twilio, Green API and Whapi.cloud integrations",
-        "Full bot code export as ZIP (Node.js + Express)",
-        "Multi-user accounts with per-user bots"
-      ],
-      "author": { "@type": "Person", "name": "Aditya Chincholkar", "url": "https://github.com/Aditya-132" }
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "FlowBot", "item": "https://flochatbot.com/" },
+        { "@type": "ListItem", "position": 2, "name": "FlowBot Studio (builder)", "item": "https://flochatbot.com/app" }
+      ]
     }
     </script>
 
@@ -71,13 +59,15 @@
     <div id="root"></div>
     <noscript>
       <main style="font-family:system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 20px;">
-        <h1>FlowBot — WhatsApp Bot Builder</h1>
-        <p>FlowBot is a free, visual drag-and-drop builder for WhatsApp chatbots. Design your bot as a
-        flowchart with 39+ ready blocks (menus, FAQs, bookings, catalogs, payments, CSAT and more),
-        create your own blocks in the Block Lab, start from templates for restaurants, banks, hotels
-        and online stores, test everything in a live simulator, then go live via Meta WhatsApp Cloud
-        API, Twilio, Green API or Whapi.cloud — or export your bot's complete Node.js code as a ZIP.</p>
-        <p>FlowBot needs JavaScript enabled to run. Please enable JavaScript and reload.</p>
+        <h1>FlowBot Studio — WhatsApp Bot Builder</h1>
+        <p>This is the FlowBot builder: design your WhatsApp bot as a flowchart with 40+ ready blocks
+        (menus, FAQs, bookings, catalogs, payments, CSAT and more), create your own blocks in the
+        Block Lab, start from templates for restaurants, banks, hotels and online stores, test
+        everything in a live simulator, then go live via Meta WhatsApp Cloud API, Twilio, Green API
+        or Whapi.cloud — or export your bot's complete Node.js code as a ZIP.</p>
+        <p>The builder needs JavaScript enabled to run. Meanwhile, you can read about FlowBot on the
+        <a href="/">home page</a>, browse <a href="/whatsapp-bot-templates">free templates</a> or the
+        <a href="/how-to-make-a-whatsapp-bot">step-by-step guide</a>.</p>
       </main>
     </noscript>
     <script type="module" src="/src/main.jsx"></script>

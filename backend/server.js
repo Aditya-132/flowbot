@@ -394,36 +394,79 @@ app.get("/api/healthz", (_req, res) => {
   res.json({ ok: true, service: "flowbot-backend" });
 });
 
-/* ------------------- SEO: robots.txt + sitemap.xml ------------------- */
-// Generated from the request host so they stay correct on any domain
-// (Render, Railway, custom domain) without hardcoding.
-const siteBase = (req) => {
-  const proto = req.headers["x-forwarded-proto"]?.split(",")[0] || req.protocol || "https";
-  const host = req.headers["x-forwarded-host"]?.split(",")[0] || req.headers.host || "localhost";
-  return `${proto}://${host}`;
-};
+/* ------------------- SEO: pages, robots.txt, sitemap.xml, llms.txt ------------------- */
+const seo = require("./seo");
 
-app.get("/robots.txt", (req, res) => {
+// Consolidate ranking signals on the canonical domain: platform subdomains
+// (e.g. *.up.railway.app) 301 to flochatbot.com for page GETs. Webhook and
+// API paths are exempt so provider callbacks configured against the platform
+// domain keep working.
+const NEVER_REDIRECT = ["/api/", "/meta/", "/green/", "/whapi/", "/whatsapp/"];
+app.use((req, res, next) => {
+  const host = (req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
+  if (
+    (req.method === "GET" || req.method === "HEAD") &&
+    /\.(up\.railway\.app|onrender\.com)$/i.test(host) &&
+    !NEVER_REDIRECT.some((p) => req.path === p.slice(0, -1) || req.path.startsWith(p))
+  ) {
+    return res.redirect(301, seo.CANONICAL + req.originalUrl);
+  }
+  next();
+});
+
+app.get("/robots.txt", (_req, res) => {
   res.type("text/plain").send(
-    `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /meta/\nDisallow: /green/\nDisallow: /whapi/\nDisallow: /whatsapp/\n\nSitemap: ${siteBase(req)}/sitemap.xml\n`
+    `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /meta/\nDisallow: /green/\nDisallow: /whapi/\nDisallow: /whatsapp/\n\nSitemap: ${seo.CANONICAL}/sitemap.xml\n`
   );
 });
 
-app.get("/sitemap.xml", (req, res) => {
-  const base = siteBase(req);
-  res.type("application/xml").send(
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${base}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`
-  );
+app.get("/sitemap.xml", (_req, res) => {
+  res.type("application/xml").send(seo.sitemapXml());
 });
+
+app.get("/llms.txt", (_req, res) => {
+  res.type("text/plain").send(seo.llmsTxt());
+});
+
+// Marketing/content pages are pre-rendered once at startup.
+for (const page of seo.pages) {
+  const html = seo.renderPage(page);
+  app.get(page.path, (_req, res) => {
+    res.set("Cache-Control", "public, max-age=300").type("html").send(html);
+  });
+}
 
 /* ------------------- Built frontend (production deploys) ------------------- */
+// The app itself lives at /app; hashed build assets get long-lived caching.
 const frontendDist = path.join(__dirname, "../frontend/dist");
 if (fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
-  app.get("*", (_req, res) => {
+  app.use(
+    express.static(frontendDist, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.set("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    })
+  );
+  app.get("/app", (_req, res) => {
+    res.set("Cache-Control", "no-cache");
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 }
+
+// Real 404s (instead of soft-404ing every unknown URL with the app shell).
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  if (req.path.startsWith("/api/")) return res.status(404).json({ error: "not found" });
+  res
+    .status(404)
+    .type("html")
+    .send(
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Page not found — FlowBot</title><meta name="robots" content="noindex"><style>body{font-family:system-ui,sans-serif;background:#f4f8f5;color:#17301f;display:grid;place-items:center;min-height:100vh;margin:0}main{text-align:center;padding:24px}a{color:#0e7a4b}</style></head><body><main><h1>404 — page not found</h1><p>That page doesn't exist. Try the <a href="/">FlowBot home page</a> or <a href="/app">open the bot builder</a>.</p></main></body></html>`
+    );
+});
 
 /* ------------------- Error middleware ------------------- */
 app.use((err, _req, res, _next) => {
