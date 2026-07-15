@@ -180,6 +180,7 @@ const FOOTER = `
       <ul>
         <li><a href="/docs">Documentation</a></li>
         <li><a href="/how-to-make-a-whatsapp-bot">How to make a WhatsApp bot</a></li>
+        <li><a href="/chatbot-flow-builder">Chatbot flow builder</a></li>
         <li><a href="/whatsapp-bot-templates">Free templates</a></li>
         <li><a href="/export-whatsapp-bot-code">Export bot code</a></li>
         <li><a href="/whatsapp-bot-comparisons">Compare vs Wati, AiSensy…</a></li>
@@ -281,7 +282,7 @@ const HOME = {
   <div>
     <h1>Build a WhatsApp bot as a flowchart — free, no code</h1>
     <p class="ownline">Any provider's API — a bot that's <strong>100% yours</strong>.</p>
-    <p class="lead">Drag blocks onto a canvas, wire them together, test the conversation in a live simulator, and go live on Meta's WhatsApp Cloud API, Twilio, Green API or Whapi.cloud. When you're done, export the complete bot as runnable Node.js code — it's yours.</p>
+    <p class="lead">Drag blocks onto a canvas in the <a href="/chatbot-flow-builder">chatbot flow builder</a>, wire them together, test the conversation in a live simulator, and go live on Meta's WhatsApp Cloud API, Twilio, Green API or Whapi.cloud. When you're done, export the complete bot as runnable Node.js code — it's yours.</p>
     <a class="cta big" href="/app">Open the free builder</a>
     <p class="sub">No signup needed to try it · Nothing to install · Works in your browser</p>
   </div>
@@ -737,7 +738,64 @@ const ALTERNATIVES = {
   ],
 };
 
-const pages = [HOME, GUIDE, RESTAURANTS, HOTELS, ECOMMERCE, TEMPLATES, EXPORT, ALTERNATIVES];
+// Targets the "bot flow builder" / "chatbot flow builder" query cluster —
+// the first non-brand queries Search Console showed us impressions for.
+const FLOW_BUILDER = {
+  path: "/chatbot-flow-builder",
+  crumb: "Chatbot flow builder",
+  priority: "0.9",
+  changefreq: "monthly",
+  title: "Chatbot Flow Builder — Free Drag & Drop Bot Flows | FlowBot",
+  desc: "FlowBot is a free bot flow builder: design chatbot conversations as flowcharts, test them in a live simulator, launch on WhatsApp or your website, and see exactly where users drop off — no code, no trial limits.",
+  h1: "The free chatbot flow builder — draw the conversation, ship the bot",
+  body: `
+<article class="doc">
+<h1>The free chatbot flow builder — draw the conversation, ship the bot</h1>
+<p class="lead">A <strong>chatbot flow builder</strong> lets you design a bot the way you'd sketch it on a whiteboard: boxes for what the bot says, arrows for where the conversation goes next. <a href="/">FlowBot</a> is a free, browser-based bot flow builder for WhatsApp and website chat — you drag blocks onto a canvas, wire them together, test the flow live, and launch it on a real number. No code, no signup to try it.</p>
+
+<h2>What is a bot flow builder?</h2>
+<p>Chat conversations are really flowcharts: a greeting leads to a menu, each menu option leads to an answer, an FAQ loop, a booking form or a human handoff. A flow builder makes that structure visual and editable. Instead of programming <code>if/else</code> chains, you see the whole conversation at a glance — every branch, every dead end — and change it by dragging a wire. FlowBot keeps the runtime deterministic too: the flow you draw is exactly what runs in production, so the bot never improvises unless you explicitly add an AI block with your own key.</p>
+
+<h2>How FlowBot's flow canvas works</h2>
+<ul>
+  <li><strong>40+ ready blocks.</strong> Menus, quick replies, FAQ keyword loops, collect email/phone/address, product catalogs, order status, appointment booking, CSAT ratings, business-hours routing, payment links, HTTP requests to your own API, human handoff and more.</li>
+  <li><strong>Branching with ports.</strong> Blocks like menus and conditions have one output dot per option — wire each to a different path. Every rating of a CSAT block can branch differently.</li>
+  <li><strong>Variables everywhere.</strong> Anything a customer types can be saved as <code>{name}</code>, <code>{order_id}</code> and reused in later messages. If a block needs a variable nobody collected yet, the bot asks for it automatically.</li>
+  <li><strong>Custom blocks (Block Lab).</strong> Chain simple steps — say, ask, set, call an API, branch — into your own reusable block when the built-ins don't cover a feature.</li>
+  <li><strong>AI drafts, you edit.</strong> Describe the bot in a sentence and the AI Builder draws a complete flowchart on the canvas (using your own LLM key). You stay in control of every block it created.</li>
+</ul>
+
+<h2>Test, launch, measure — in the same tool</h2>
+<p>The built-in simulator runs the exact same engine as production, so you can click through every branch before going live. Launching takes one panel: connect Meta's WhatsApp Cloud API, Twilio, Green API or Whapi.cloud — or skip WhatsApp entirely and <a href="/docs">embed the bot as a chat widget on your website</a>.</p>
+<p>Once the bot is live, the flow builder becomes an analytics surface: toggle the <strong>funnel overlay</strong> and every block on the canvas shows how many real conversations reached it in the last 30 days — so you see exactly where people drop off and which menu options nobody picks. A live <strong>inbox</strong> shows every conversation as it happens, and you can take over from the bot mid-chat and reply yourself when a customer needs a human.</p>
+
+<h2>Your flow is code you can take with you</h2>
+<p>Most flow builders lock your work inside their platform. FlowBot does the opposite: <a href="/export-whatsapp-bot-code">export any flow as a standalone Node.js project</a> — the flowchart JSON plus the same engine that runs it — and host it anywhere, free forever. The visual flow and the running bot are never out of sync, because they're the same thing.</p>
+
+<h2>Start from a template, not a blank canvas</h2>
+<p>Load a <a href="/whatsapp-bot-templates">ready-made template</a> — restaurant ordering, hotel concierge, e-commerce support, lead capture — and reshape the flow to fit your business. Or follow the <a href="/how-to-make-a-whatsapp-bot">step-by-step guide</a> from blank canvas to live bot.</p>
+</article>`,
+  faqs: [
+    {
+      q: "What is a chatbot flow builder?",
+      a: "A visual editor where a bot's conversation is designed as a flowchart: blocks for messages, menus and questions, wires for where each answer leads. It replaces coding if/else logic with drag-and-drop, so non-developers can build and change bots.",
+    },
+    {
+      q: "Is FlowBot's flow builder really free?",
+      a: "Yes — designing flows, the simulator, templates, the website widget, analytics and code export are free. You only pay whatever your WhatsApp provider charges for messages (Meta's Cloud API has a free tier for service conversations).",
+    },
+    {
+      q: "Can I build a bot flow without writing code?",
+      a: "Yes. Every block is configured with plain-text fields, and branching is done by dragging wires. Code only appears if you want it: any flow can be exported as a Node.js project to self-host.",
+    },
+    {
+      q: "Does the flow builder show where users drop off?",
+      a: "Yes — the funnel overlay displays, on each block of the canvas, how many conversations reached it in the last 30 days, so you can spot the exact step where people abandon the flow and fix it.",
+    },
+  ],
+};
+
+const pages = [HOME, GUIDE, RESTAURANTS, HOTELS, ECOMMERCE, TEMPLATES, EXPORT, ALTERNATIVES, FLOW_BUILDER];
 
 /* ------------------------- sitemap + llms.txt ------------------------- */
 
