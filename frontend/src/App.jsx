@@ -1926,60 +1926,62 @@ function Builder({ user, onAuthed, onLogout }) {
               </button>
             </>)}
 
-            {activated && botId && (
-              <div style={S.liveBox}>
-                <div style={{ fontWeight: 800, color: "#059669", marginBottom: 6 }}>● Bot is live on this backend</div>
-                <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.7 }}>
-                  {provider === "meta" ? (<>
-                    Callback URL (paste in Meta App → WhatsApp → Configuration):
-                    <div style={{ ...S.inlineCode, display: "block", padding: 8, margin: "6px 0", wordBreak: "break-all" }}>
-                      https://&lt;your-host&gt;/meta/webhook/{botId}
-                    </div>
-                    Verify token:
-                    <div style={{ ...S.inlineCode, display: "block", padding: 8, margin: "6px 0", wordBreak: "break-all" }}>
-                      {activation?.verifyToken || "(re-activate to view)"}
-                    </div>
-                    <ol style={{ margin: 0, paddingLeft: 18 }}>
-                      <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code> (Meta needs https).</li>
-                      <li>Meta App → WhatsApp → Configuration → Webhook: paste Callback URL + Verify token, click Verify & save.</li>
-                      <li>Subscribe to the <b>messages</b> webhook field.</li>
-                      <li>In API Setup, add your personal WhatsApp number as a recipient, then message the test number — the bot will reply. 🎉</li>
-                    </ol>
-                  </>) : provider === "green" ? (<>
-                    Webhook URL (paste in Green API instance settings):
-                    <div style={{ ...S.inlineCode, display: "block", padding: 8, margin: "6px 0", wordBreak: "break-all" }}>
-                      https://&lt;your-host&gt;/green/webhook/{botId}
-                    </div>
-                    <ol style={{ margin: 0, paddingLeft: 18 }}>
-                      <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code>.</li>
-                      <li>Green API Console → Instance → Settings: enable incoming webhooks and paste the Webhook URL.</li>
-                      <li>Scan QR from your Green API instance, then message the paired WhatsApp number. Done. 🎉</li>
-                    </ol>
-                  </>) : provider === "whapi" ? (<>
-                    Webhook URL (paste in Whapi.cloud channel settings):
-                    <div style={{ ...S.inlineCode, display: "block", padding: 8, margin: "6px 0", wordBreak: "break-all" }}>
-                      https://&lt;your-host&gt;/whapi/webhook/{botId}
-                    </div>
-                    <ol style={{ margin: 0, paddingLeft: 18 }}>
-                      <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code>.</li>
-                      <li>Whapi.cloud Channel Settings → Webhooks: add this URL for <b>messages.post</b>.</li>
-                      <li>Pair the channel by QR, then message the paired WhatsApp number. Done. 🎉</li>
-                    </ol>
-                  </>) : (<>
-                    Webhook endpoint:
-                    <div style={{ ...S.inlineCode, display: "block", padding: 8, margin: "6px 0", wordBreak: "break-all" }}>
-                      POST http://&lt;your-host&gt;:3001/whatsapp/{botId}
-                    </div>
-                    <ol style={{ margin: 0, paddingLeft: 18 }}>
-                      <li>Expose the backend (e.g. <code style={S.inlineCode}>ngrok http 3001</code>).</li>
-                      <li>Paste the URL into Twilio Sandbox → "When a message comes in".</li>
-                      <li>Message your sandbox number on WhatsApp — done. 🎉</li>
-                    </ol>
-                  </>)}
-                  <div style={{ marginTop: 6 }}>Or download <b>server.js</b> from tab 2 and host the bot anywhere on its own.</div>
+            {activated && botId && (() => {
+              // On the hosted app the page origin IS the webhook host; only local
+              // dev (vite on localhost) needs the tunnel + placeholder guidance.
+              const isLocal = /^(localhost|127\.|0\.0\.0\.0)/.test(window.location.hostname);
+              const base = isLocal ? "https://<your-host>" : window.location.origin;
+              const CodeRow = ({ text, label }) => (
+                <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "6px 0" }}>
+                  <div style={{ ...S.inlineCode, display: "block", padding: 8, flex: 1, wordBreak: "break-all" }}>{text}</div>
+                  {!isLocal && <button style={S.miniBtn} onClick={() => copyText(text, label)}>Copy</button>}
                 </div>
-              </div>
-            )}
+              );
+              return (
+                <div style={S.liveBox}>
+                  <div style={{ fontWeight: 800, color: "#059669", marginBottom: 6 }}>● Bot is live on this backend</div>
+                  <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.7 }}>
+                    {provider === "meta" ? (<>
+                      Callback URL (paste in Meta App → WhatsApp → Configuration):
+                      <CodeRow text={`${base}/meta/webhook/${botId}`} label="Callback URL" />
+                      Verify token:
+                      <CodeRow text={activation?.verifyToken || "(re-activate to view)"} label="Verify token" />
+                      <ol style={{ margin: 0, paddingLeft: 18 }}>
+                        {isLocal && <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code> (Meta needs https).</li>}
+                        <li>Meta App → WhatsApp → Configuration → Webhook: paste Callback URL + Verify token, click Verify & save.</li>
+                        <li>Subscribe to the <b>messages</b> webhook field.</li>
+                        <li>In API Setup, add your personal WhatsApp number as a recipient, then message the test number — the bot will reply. 🎉</li>
+                      </ol>
+                    </>) : provider === "green" ? (<>
+                      Webhook URL (paste in Green API instance settings):
+                      <CodeRow text={`${base}/green/webhook/${botId}`} label="Webhook URL" />
+                      <ol style={{ margin: 0, paddingLeft: 18 }}>
+                        {isLocal && <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code>.</li>}
+                        <li>Green API Console → Instance → Settings: enable incoming webhooks and paste the Webhook URL.</li>
+                        <li>Scan QR from your Green API instance, then message the paired WhatsApp number. Done. 🎉</li>
+                      </ol>
+                    </>) : provider === "whapi" ? (<>
+                      Webhook URL (paste in Whapi.cloud channel settings):
+                      <CodeRow text={`${base}/whapi/webhook/${botId}`} label="Webhook URL" />
+                      <ol style={{ margin: 0, paddingLeft: 18 }}>
+                        {isLocal && <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code>.</li>}
+                        <li>Whapi.cloud Channel Settings → Webhooks: add this URL for <b>messages.post</b>.</li>
+                        <li>Pair the channel by QR, then message the paired WhatsApp number. Done. 🎉</li>
+                      </ol>
+                    </>) : (<>
+                      Webhook endpoint:
+                      <CodeRow text={isLocal ? `POST http://<your-host>:3001/whatsapp/${botId}` : `${base}/whatsapp/${botId}`} label="Webhook URL" />
+                      <ol style={{ margin: 0, paddingLeft: 18 }}>
+                        {isLocal && <li>Expose the backend (e.g. <code style={S.inlineCode}>ngrok http 3001</code>).</li>}
+                        <li>Paste the URL into Twilio Sandbox → "When a message comes in".</li>
+                        <li>Message your sandbox number on WhatsApp — done. 🎉</li>
+                      </ol>
+                    </>)}
+                    <div style={{ marginTop: 6 }}>Or download <b>server.js</b> from tab 2 and host the bot anywhere on its own.</div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* phone simulator */}
