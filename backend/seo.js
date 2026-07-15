@@ -173,6 +173,8 @@ const FOOTER = `
         <li><a href="/whatsapp-bot-for-restaurants">Restaurants</a></li>
         <li><a href="/whatsapp-bot-for-hotels">Hotels</a></li>
         <li><a href="/whatsapp-bot-for-ecommerce">Online stores</a></li>
+        <li><a href="/whatsapp-bots-for-clients">Freelancers &amp; agencies</a></li>
+        <li><a href="/whatsapp-bot-for-developers">Developers</a></li>
       </ul>
     </div>
     <div>
@@ -316,6 +318,11 @@ const HOME = {
 <section>
   <h2>Start from a real template, not a blank canvas</h2>
   <p>FlowBot includes complete, working bots you can load with one click and make your own: a <a href="/whatsapp-bot-for-restaurants">restaurant ordering bot</a>, a <a href="/whatsapp-bot-for-hotels">77-block hotel concierge</a>, an <a href="/whatsapp-bot-for-ecommerce">online store bot</a> with catalog and order tracking, a bank assistant, and a chess academy bot with class bookings. <a href="/whatsapp-bot-templates">Browse all templates →</a></p>
+</section>
+
+<section>
+  <h2>Building for someone else?</h2>
+  <p><a href="/whatsapp-bots-for-clients">Freelancers and agencies</a> use FlowBot to build client bots with zero platform cost — demo with a live share link, launch on the client's own number, and hand over the exported code as the deliverable. <a href="/whatsapp-bot-for-developers">Developers</a> treat it as a code generator: design the flow visually, export a standalone Node.js project, and keep building on top.</p>
 </section>
 
 <section>
@@ -795,7 +802,116 @@ const FLOW_BUILDER = {
   ],
 };
 
-const pages = [HOME, GUIDE, RESTAURANTS, HOTELS, ECOMMERCE, TEMPLATES, EXPORT, ALTERNATIVES, FLOW_BUILDER];
+// Freelancers/agencies: people who build and sell bots to clients.
+const FREELANCERS = {
+  path: "/whatsapp-bots-for-clients",
+  crumb: "WhatsApp bots for clients",
+  priority: "0.9",
+  changefreq: "monthly",
+  title: "Build WhatsApp Bots for Clients — Free Tool for Freelancers",
+  desc: "Freelancers and agencies: build WhatsApp bots for clients with zero platform cost, demo them with a live share link, then hand over the full source code — or host it and charge a retainer.",
+  h1: "Build WhatsApp bots for clients — keep 100% of what you charge",
+  body: `
+<article class="doc">
+<h1>Build WhatsApp bots for clients — keep 100% of what you charge</h1>
+<p class="lead">Most bot platforms take a monthly cut of every client you onboard — your margin funds their subscription. <a href="/">FlowBot</a> is a free builder, so a client bot costs you <strong>nothing to build and nothing per month</strong>: design it as a flowchart, demo it with a live link, launch it on the client's own WhatsApp number, and deliver the source code as the hand-off. Whatever you charge is yours.</p>
+
+<h2>The freelancer workflow, end to end</h2>
+<ol class="steps">
+  <li><strong>Draft in minutes.</strong> Start from a <a href="/whatsapp-bot-templates">template</a> close to the client's business — restaurant, store, clinic, hotel — or describe the brief to the AI Builder and edit the flowchart it draws.</li>
+  <li><strong>Demo without a meeting.</strong> Every bot gets a public <em>share page</em>: the client opens one link, sees the flowchart, and chats with the bot live in their browser. No account, no screen-share, no "imagine it works".</li>
+  <li><strong>Launch on the client's number.</strong> Connect <em>their</em> Meta Cloud API, Twilio, Green API or Whapi account in the activation panel — message costs bill straight to the client, never through you.</li>
+  <li><strong>Hand over (or host).</strong> Deliverable option A: <a href="/export-whatsapp-bot-code">export the bot as a Node.js project</a> and hand the client code they fully own — a deliverable platforms can't match. Option B: keep it running yourself and charge a monthly care retainer.</li>
+</ol>
+
+<h2>Why clients say yes faster</h2>
+<ul>
+  <li><strong>No platform fee to explain.</strong> Your quote covers your work — not a third-party subscription the client resents in month three.</li>
+  <li><strong>The bot is theirs.</strong> "You'll own the full source code" wins deals against agencies pitching locked platforms. There's a <a href="/whatsapp-bot-comparisons">comparison hub</a> you can send skeptical clients.</li>
+  <li><strong>Website widget included.</strong> The same flow embeds on the client's site with one script tag — two deliverables from one build.</li>
+  <li><strong>Numbers to report.</strong> The funnel overlay shows how many conversations reached each block, and the analytics panel gives 30-day totals — screenshot-ready for your monthly client report.</li>
+</ul>
+
+<h2>Scaling past the first client</h2>
+<p>Flows are independent — build each client's bot in its own flow, reuse your best blocks via <em>Block Lab</em> (your custom blocks work in every project), and keep a private library of template flows you clone per niche. When a client outgrows the setup, the code export means the upgrade path is a migration, not a rebuild.</p>
+</article>`,
+  faqs: [
+    {
+      q: "Can I white-label bots built with FlowBot?",
+      a: "The exported code is plain Node.js with no FlowBot branding, phone-home or license strings — deliver it under your own name. The hosted share page shows FlowBot chrome, so for a fully branded demo, host the exported bot or embed the widget on your own domain.",
+    },
+    {
+      q: "How do freelancers usually charge for WhatsApp bots?",
+      a: "Common models: a fixed build fee (often ₹15k–₹1L / $200–$1,500 depending on scope), plus either a monthly retainer if you host and maintain it, or a larger one-time fee if you hand over the exported code. Since FlowBot is free, everything above provider message costs is margin.",
+    },
+    {
+      q: "Do my clients need a FlowBot account?",
+      a: "No. Clients interact with the demo share link and their own WhatsApp number. Only you use the builder. If a client later wants to self-serve, hand them the flow or the exported project.",
+    },
+    {
+      q: "Whose WhatsApp provider account should the bot run on?",
+      a: "The client's — connect their Meta/Twilio/Green/Whapi credentials so message billing and the number belong to them. That keeps you out of their billing path and makes hand-offs clean.",
+    },
+  ],
+};
+
+// Developers: FlowBot as a code generator / boilerplate killer.
+const DEVELOPERS = {
+  path: "/whatsapp-bot-for-developers",
+  crumb: "WhatsApp bots for developers",
+  priority: "0.9",
+  changefreq: "monthly",
+  title: "WhatsApp Bot Builder for Developers — Export Real Node.js Code",
+  desc: "A dev tool, not a walled garden: design WhatsApp bot flows visually, then export a standalone Node.js + Express project — deterministic engine, webhook handlers, .env config. MIT-clean, self-host anywhere.",
+  h1: "The WhatsApp bot builder that exports real code",
+  body: `
+<article class="doc">
+<h1>The WhatsApp bot builder that exports real code</h1>
+<p class="lead">Writing a WhatsApp bot from scratch means webhook plumbing, provider payload parsing, session state, reply formatting — a day of boilerplate before the first useful reply. <a href="/">FlowBot</a> treats the visual canvas as a <strong>code generator</strong>: design the conversation as a flowchart, test it, then export a standalone Node.js + Express project you own and extend. No SDK lock-in, no phone-home, no platform runtime.</p>
+
+<h2>What's in the exported ZIP</h2>
+<ul>
+  <li><code>server.js</code> — the complete bot: your flow as data, the deterministic engine that interprets it, and the webhook endpoint for your provider (Twilio TwiML, Meta Graph API, Green API or Whapi REST).</li>
+  <li><code>package.json</code> — minimal dependencies, <code>npm start</code> and you're live on any Node 18+ host.</li>
+  <li><code>.env.example</code> + <code>README.md</code> — provider credentials, PORT config, and deploy notes (Render, Railway, a VPS, anywhere).</li>
+</ul>
+<p>The exported engine is the <em>same</em> engine that runs in FlowBot's simulator and hosted webhooks — behavior is identical by construction, so what you tested is what ships.</p>
+
+<h2>Built for integration, not isolation</h2>
+<ul>
+  <li><strong>HTTP Request block.</strong> Call your own API mid-flow — <code>{vars}</code> interpolate into URL, headers and body; pick a field from the JSON response into a session variable and branch on failure.</li>
+  <li><strong>Custom blocks.</strong> Chain say / ask / set / api / choice steps into reusable components — effectively writing functions visually, including API calls with error paths.</li>
+  <li><strong>Deterministic by default.</strong> The engine interprets exactly the flowchart JSON. AI enters only where you place an AI block, scoped to that block, on your own Anthropic/OpenAI/Gemini key.</li>
+  <li><strong>Sessions in Postgres</strong> on the hosted version; the exported bot keeps state in-process by default — swap in your own store if you need multi-instance.</li>
+</ul>
+
+<h2>Why not just write it by hand?</h2>
+<p>You can — the export shows you exactly what you'd have written. FlowBot earns its place as the <em>spec + boilerplate layer</em>: product people edit the flowchart, you review the diff of the flow JSON, and nobody re-implements "menu with three options that collects a phone number" for the fifth time. When requirements outgrow the canvas, export and keep coding — the flow JSON and engine are plain, readable JavaScript, not a proprietary bytecode.</p>
+
+<h2>Webhook architecture (hosted mode)</h2>
+<p>Each activated bot gets its own endpoint per provider — <code>/whatsapp/:id</code> (Twilio), <code>/meta/webhook/:id</code> (Cloud API with verify-token handshake), <code>/green/webhook/:id</code>, <code>/whapi/webhook/:id</code>. Incoming payloads are normalized to <code>{from, text}</code>, run through the engine against the stored session, and replies fan out via the provider's send API. The <a href="/docs">docs</a> cover each provider's setup.</p>
+</article>`,
+  faqs: [
+    {
+      q: "Does the exported bot depend on FlowBot at runtime?",
+      a: "No — the ZIP is a standalone Node.js + Express project with its own engine copy. It never calls FlowBot's servers, works offline from the platform, and keeps running if FlowBot disappears tomorrow.",
+    },
+    {
+      q: "Can I modify the exported code?",
+      a: "Yes, that's the point — it's readable JavaScript: the flow as a JSON structure plus an interpreter function. Add routes, swap the session store, wire in your logger; it's your codebase after export.",
+    },
+    {
+      q: "Which languages does the export support?",
+      a: "Node.js (Express). The flow itself is plain JSON, so porting the interpreter to another language is straightforward if you need to — the engine is a few hundred lines of deterministic logic.",
+    },
+    {
+      q: "How do I call my backend from a flow?",
+      a: "Use the HTTP Request block (or an api step in a custom block): method, URL, headers and body support {variable} interpolation, a JSON path picks the response field to store, and a second output port handles errors.",
+    },
+  ],
+};
+
+const pages = [HOME, GUIDE, RESTAURANTS, HOTELS, ECOMMERCE, TEMPLATES, EXPORT, ALTERNATIVES, FLOW_BUILDER, FREELANCERS, DEVELOPERS];
 
 /* ------------------------- sitemap + llms.txt ------------------------- */
 
