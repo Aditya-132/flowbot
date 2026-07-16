@@ -7,7 +7,7 @@
 // ============================================================
 
 const CANONICAL = "https://flochatbot.com";
-const LASTMOD = "2026-07-16"; // bump when page copy changes
+const LASTMOD = "2026-07-17"; // bump when page copy changes
 
 /* ------------------------------ helpers ------------------------------ */
 
@@ -267,6 +267,7 @@ ${jsonLd.map((o) => `<script type="application/ld+json">${JSON.stringify(o)}</sc
 </div></header>
 ${crumbs}
 <main class="wrap">
+${page.path !== "/" && page.h1 && !page.body.includes("<h1") ? `<h1>${esc(page.h1)}</h1>` : ""}
 ${page.body}
 ${page.faqs && page.faqs.length ? `<section id="faq"><h2>Frequently asked questions</h2>${faqHtml(page.faqs)}</section>` : ""}
 ${CTA_BAND}

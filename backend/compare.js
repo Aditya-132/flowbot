@@ -58,6 +58,9 @@ const HUB = {
   <div class="card"><h3><a href="/yellow-ai-alternative">FlowBot vs Yellow.ai</a></h3><p>The small-business answer to an enterprise platform.</p></div>
 </div>
 
+<h2>Comparing two other platforms?</h2>
+<p>Head-to-head guides for the shortlists we see most often — an honest verdict for both sides, plus the free third option: <a href="/wati-vs-aisensy">Wati vs AiSensy</a> · <a href="/wati-vs-interakt">Wati vs Interakt</a> · <a href="/wati-vs-gallabox">Wati vs Gallabox</a> · <a href="/aisensy-vs-interakt">AiSensy vs Interakt</a> · <a href="/aisensy-vs-gallabox">AiSensy vs Gallabox</a> · <a href="/interakt-vs-gallabox">Interakt vs Gallabox</a></p>
+
 <h2>The one-line summary</h2>
 <p>If you want a <strong>managed all-in-one platform</strong> — shared team inbox, broadcast campaigns, official BSP support — a paid provider like Wati, AiSensy or Interakt earns its fee. If you want to <strong>build a WhatsApp bot for free and own it</strong> — export the code, host it anywhere, bring any provider — that's FlowBot. Many businesses even use both: FlowBot to design and own the conversation logic, a BSP for broadcasts.</p>
 ${CTA_NOTE}`,
@@ -610,7 +613,158 @@ ${CTA_NOTE}`,
   ],
 };
 
-const pages = [HUB, WATI, AISENSY, INTERAKT, MANYCHAT, LANDBOT, GALLABOX, TWILIO_STUDIO, WA_BUSINESS_APP, CHATFUEL, TIDIO, BOTPRESS, RESPOND_IO, SLEEKFLOW, ZOKO, DOUBLETICK, YELLOW_AI];
+/* ------------------- third-party "X vs Y" comparisons -------------------
+   Search Console shows queries like "wati vs aisensy" and "wati vs gallabox"
+   surfacing our alternative pages. These pages answer that exact question
+   honestly — a verdict for both sides — then present FlowBot as the free,
+   ownable third option. Facts mirror the alternative pages above. */
+
+const BRANDS = {
+  wati: {
+    name: "Wati",
+    alt: "/wati-alternative",
+    rows: {
+      pricing: "Paid monthly plans; automation on higher tiers",
+      meta: "Adds a markup on Meta's conversation rates",
+      builder: "Visual flow builder on paid tiers",
+      inbox: "Mature shared team inbox with roles",
+    },
+    strength: "a mature team inbox and deep CRM integrations (Zoho, HubSpot, Salesforce)",
+    chooseIf: "your support team lives in a shared inbox and your CRM must stay in sync",
+  },
+  aisensy: {
+    name: "AiSensy",
+    alt: "/aisensy-alternative",
+    rows: {
+      pricing: "Free tier; paid plans for advanced features",
+      meta: "No markup — Meta's rates passed through",
+      builder: "Chatbot flows included; campaign-first product",
+      inbox: "Team inbox on paid plans",
+    },
+    strength: "broadcast campaigns and marketing automation at Indian-market pricing",
+    chooseIf: "WhatsApp is primarily a marketing channel for you — campaigns, broadcasts, click-to-WhatsApp ads",
+  },
+  interakt: {
+    name: "Interakt",
+    alt: "/interakt-alternative",
+    rows: {
+      pricing: "Quarterly plans",
+      meta: "Standard BSP conversation billing",
+      builder: "Automation workflows included",
+      inbox: "Shared team inbox",
+    },
+    strength: "D2C e-commerce tooling and unified WhatsApp + Instagram handling",
+    chooseIf: "you run a D2C store and want WhatsApp and Instagram handled in one dashboard",
+  },
+  gallabox: {
+    name: "Gallabox",
+    alt: "/gallabox-alternative",
+    rows: {
+      pricing: "Paid plans",
+      meta: "Standard BSP conversation billing",
+      builder: "No-code bot builder included",
+      inbox: "Shared team inbox with sales workflows",
+    },
+    strength: "a no-code builder paired with a sales-focused team inbox and lead workflows",
+    chooseIf: "a sales team qualifies WhatsApp leads together and wants no-code workflows around that",
+  },
+};
+
+const vsTable = (a, b) => `<div class="tablewrap"><table>
+<tr><th></th><th>${a.name}</th><th>${b.name}</th></tr>
+<tr><td>Pricing model</td><td>${a.rows.pricing}</td><td>${b.rows.pricing}</td></tr>
+<tr><td>Meta message rates</td><td>${a.rows.meta}</td><td>${b.rows.meta}</td></tr>
+<tr><td>Bot building</td><td>${a.rows.builder}</td><td>${b.rows.builder}</td></tr>
+<tr><td>Team inbox</td><td>${a.rows.inbox}</td><td>${b.rows.inbox}</td></tr>
+<tr><td>Own your bot's code</td><td>No — managed cloud</td><td>No — managed cloud</td></tr>
+</table></div>`;
+
+const vsPage = (aKey, bKey, x) => {
+  const a = BRANDS[aKey], b = BRANDS[bKey];
+  return {
+    path: `/${aKey}-vs-${bKey}`,
+    crumb: `${a.name} vs ${b.name}`,
+    priority: "0.7",
+    changefreq: "monthly",
+    title: `${a.name} vs ${b.name} (2026): Honest Comparison + Free Alternative`,
+    desc: `${a.name} vs ${b.name} for WhatsApp business messaging — pricing, bot builders, team inboxes and who each one fits. Plus the free third option: FlowBot, where you own the bot and its code.`,
+    h1: `${a.name} vs ${b.name}: which one — and do you need either?`,
+    body: `
+<p class="lead">${x.lead}</p>
+
+${vsTable(a, b)}
+${DISCLAIMER}
+
+<h2>Choose ${a.name} if…</h2>
+<p>…${a.chooseIf}. ${a.name}'s edge is ${a.strength}.</p>
+
+<h2>Choose ${b.name} if…</h2>
+<p>…${b.chooseIf}. ${b.name}'s edge is ${b.strength}.</p>
+
+<h2>The third option: build the bot free and own it</h2>
+<p>If what you actually need from ${a.name} or ${b.name} is <em>the WhatsApp bot itself</em> — menus, FAQs, bookings, orders, lead capture — you may not need a subscription at all. <a href="/">FlowBot</a> builds the bot as a drag-and-drop flowchart, free: test it in a live simulator, launch it on your own provider account (Meta Cloud API, Twilio, Green API or Whapi.cloud) and <a href="/export-whatsapp-bot-code">export the complete Node.js code</a> whenever you like. A live inbox with human takeover, funnel analytics and a website chat widget are included. What it isn't: a managed BSP with a multi-agent campaign suite — that's exactly the part ${a.name} and ${b.name} charge for.</p>
+<p>Full comparisons: <a href="${a.alt}">FlowBot vs ${a.name}</a> · <a href="${b.alt}">FlowBot vs ${b.name}</a> · <a href="/whatsapp-bot-comparisons">all 16 platforms</a>.</p>
+${CTA_NOTE}`,
+    faqs: [
+      {
+        q: `Which is better, ${a.name} or ${b.name}?`,
+        a: `Neither is universally better. ${a.name} fits when ${a.chooseIf}. ${b.name} fits when ${b.chooseIf}. If you only need the bot itself, consider whether you need either — FlowBot builds and runs one free on your own Meta, Twilio, Green API or Whapi account.`,
+      },
+      {
+        q: `Is there a free alternative to ${a.name} and ${b.name}?`,
+        a: `Yes — FlowBot. The visual builder, templates, live simulator, website widget, inbox with human takeover and full Node.js code export are free; you pay only your WhatsApp provider's message costs. Unlike a managed BSP, you can export the bot and leave any time.`,
+      },
+      x.faq,
+    ],
+  };
+};
+
+const VS_PAGES = [
+  vsPage("wati", "aisensy", {
+    lead: `Wati and AiSensy are the two names Indian businesses shortlist first for WhatsApp. The honest split: AiSensy is the value pick for campaign-led marketing — there's a free tier and Meta's conversation rates are passed through without markup — while Wati is the more support-oriented platform, with a mature team inbox and CRM integrations that its higher pricing pays for.`,
+    faq: {
+      q: "Do Wati and AiSensy charge a markup on Meta's message rates?",
+      a: "Wati's plans add a markup on Meta's conversation rates; AiSensy passes Meta's rates through and charges for the platform instead. Either way you're paying for the managed platform — with a bring-your-own-provider builder like FlowBot, you pay Meta (or Twilio, Green API, Whapi) directly and nothing on top.",
+    },
+  }),
+  vsPage("wati", "interakt", {
+    lead: `Wati and Interakt solve overlapping but different problems. Wati leans into customer support — shared team inbox, roles, CRM integrations — on monthly plans. Interakt, backed by Jio Haptik, leans into D2C commerce with unified WhatsApp + Instagram handling, billed quarterly. Which fits depends on whether your WhatsApp is a support desk or a storefront.`,
+    faq: {
+      q: "Does Wati handle Instagram like Interakt does?",
+      a: "Unified WhatsApp + Instagram handling is Interakt's differentiator; Wati is WhatsApp-centric. If Instagram DMs are a real channel for your store, that's a point for Interakt — if not, compare them on inbox and CRM fit instead.",
+    },
+  }),
+  vsPage("wati", "gallabox", {
+    lead: `Wati and Gallabox both sell a managed WhatsApp inbox for SMB teams, so this choice is about flavour: Wati goes deeper on CRM integrations (Zoho, HubSpot, Salesforce) and support workflows, while Gallabox pairs a friendlier no-code builder with sales-focused lead workflows. Both are subscriptions; neither lets you take the bot with you.`,
+    faq: {
+      q: "Which is easier for a non-technical team, Wati or Gallabox?",
+      a: "Gallabox generally gets the nod for no-code friendliness; Wati's flow builder sits on its higher tiers. If ease-of-building is the whole question, also try FlowBot's free drag-and-drop canvas — there's no signup, so you can judge in ten minutes.",
+    },
+  }),
+  vsPage("aisensy", "interakt", {
+    lead: `AiSensy and Interakt are both Indian-market favourites with sharp pricing, so the real question is what your WhatsApp is for. AiSensy is campaign-first — broadcasts, click-to-WhatsApp ads, marketing automation, with a free tier to start. Interakt is store-first — D2C tooling and unified WhatsApp + Instagram, on quarterly plans.`,
+    faq: {
+      q: "How do AiSensy and Interakt differ on billing?",
+      a: "AiSensy has a free tier and monthly paid plans with Meta's rates passed through; Interakt bills on quarterly plans. If you want to start without committing, AiSensy's free tier — or a genuinely free builder like FlowBot — is the lower-friction door.",
+    },
+  }),
+  vsPage("aisensy", "gallabox", {
+    lead: `AiSensy and Gallabox overlap less than their listings suggest. AiSensy is a marketing engine — campaigns, broadcasts and ads at value pricing with a free tier. Gallabox is a sales workspace — a no-code builder feeding a shared team inbox with lead workflows. Marketing-led teams lean AiSensy; sales-led teams lean Gallabox.`,
+    faq: {
+      q: "Which is better for lead generation, AiSensy or Gallabox?",
+      a: "For generating leads (click-to-WhatsApp ads, broadcasts), AiSensy's marketing tooling fits. For qualifying and closing leads as a team, Gallabox's sales inbox fits. The bot that captures and routes those leads is something you can also build free — FlowBot's Collect blocks save answers as variables and hand off to a human when needed.",
+    },
+  }),
+  vsPage("interakt", "gallabox", {
+    lead: `Interakt and Gallabox both court Indian SMBs, from different angles. Interakt is commerce infrastructure — D2C catalog tooling and unified WhatsApp + Instagram, quarterly billing. Gallabox is a team workspace — no-code bot builder plus a sales inbox with lead workflows. Pick by which mirrors your day: running a store, or running a pipeline.`,
+    faq: {
+      q: "I run a Shopify/D2C store — Interakt or Gallabox?",
+      a: "Interakt's D2C tooling and Instagram coverage make it the more store-shaped choice; Gallabox counters with sales workflows if your revenue comes from conversations rather than catalog traffic. For the storefront bot itself — catalog, order status, payment links — FlowBot's free e-commerce template covers it and exports the code.",
+    },
+  }),
+];
+
+const pages = [HUB, WATI, AISENSY, INTERAKT, MANYCHAT, LANDBOT, GALLABOX, TWILIO_STUDIO, WA_BUSINESS_APP, CHATFUEL, TIDIO, BOTPRESS, RESPOND_IO, SLEEKFLOW, ZOKO, DOUBLETICK, YELLOW_AI, ...VS_PAGES];
 
 // sitemap/llms entries (same shape docs.entries uses)
 const entries = pages.map((p) => ({ path: p.path, title: p.title, desc: p.desc, priority: p.priority, changefreq: p.changefreq }));
