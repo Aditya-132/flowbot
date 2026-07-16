@@ -683,12 +683,14 @@ const compare = require("./compare");
 // docs + competitor-comparison pages both feed the sitemap and llms.txt
 const extraEntries = [...docs.entries, ...compare.entries];
 
+// Explicit short cache: without a Cache-Control header Railway's edge caches
+// these for hours, so crawlers kept getting a pre-deploy sitemap.
 app.get("/sitemap.xml", (_req, res) => {
-  res.type("application/xml").send(seo.sitemapXml(extraEntries));
+  res.set("Cache-Control", "public, max-age=300").type("application/xml").send(seo.sitemapXml(extraEntries));
 });
 
 app.get("/llms.txt", (_req, res) => {
-  res.type("text/plain").send(seo.llmsTxt(extraEntries));
+  res.set("Cache-Control", "public, max-age=300").type("text/plain").send(seo.llmsTxt(extraEntries));
 });
 
 // Marketing/content pages + competitor-comparison pages are pre-rendered once.
