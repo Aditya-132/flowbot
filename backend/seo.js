@@ -124,6 +124,8 @@ nav.top a:hover{color:#0e7a4b}
 .ownbanner p{margin:0;color:#c9ead6;font-size:16px}
 .ownbanner a{color:#8fe0ae;font-weight:700}
 .videowrap{margin-top:18px}
+.hero .videowrap{margin-top:0}
+.hero .videowrap .sub{margin-top:10px}
 .videowrap video{width:100%;height:auto;display:block;border-radius:16px;border:1px solid #dbe7de;box-shadow:0 14px 40px rgba(11,40,24,.16);background:#0b2818}
 .hero svg{max-width:100%;height:auto}
 section{padding:26px 0}
@@ -155,15 +157,6 @@ footer.site li{margin:6px 0}
 `;
 
 const LOGO_SVG = `<svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#25D366"/><stop offset="1" stop-color="#128C7E"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#lg)"/><path d="M36 8 L18 36 h10 L26 56 L46 26 h-11 z" fill="#06130b"/></svg>`;
-
-const HERO_SVG = `<svg viewBox="0 0 430 300" width="430" role="img" aria-label="Flowchart of a WhatsApp bot: welcome message connecting to a menu and an FAQ auto-reply">
-<defs><filter id="s" x="-10%" y="-10%" width="130%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0b2818" flood-opacity="0.10"/></filter></defs>
-<path d="M205 60 C 260 60, 240 140, 285 140" fill="none" stroke="#25D366" stroke-width="3"/>
-<path d="M205 60 C 250 60, 200 230, 245 230" fill="none" stroke="#25D366" stroke-width="3"/>
-<g filter="url(#s)"><rect x="10" y="25" width="195" height="70" rx="14" fill="#fff"/><rect x="10" y="25" width="8" height="70" rx="4" fill="#25D366"/><text x="34" y="55" font-family="system-ui,sans-serif" font-size="16" font-weight="700" fill="#12301f">Welcome</text><text x="34" y="78" font-family="system-ui,sans-serif" font-size="13" fill="#5b7466">greet the customer</text></g>
-<g filter="url(#s)"><rect x="285" y="105" width="140" height="70" rx="14" fill="#fff"/><rect x="285" y="105" width="8" height="70" rx="4" fill="#F5B841"/><text x="307" y="135" font-family="system-ui,sans-serif" font-size="16" font-weight="700" fill="#12301f">Menu</text><text x="307" y="158" font-family="system-ui,sans-serif" font-size="13" fill="#5b7466">1 · 2 · 3</text></g>
-<g filter="url(#s)"><rect x="245" y="195" width="175" height="70" rx="14" fill="#fff"/><rect x="245" y="195" width="8" height="70" rx="4" fill="#4EA8DE"/><text x="269" y="225" font-family="system-ui,sans-serif" font-size="16" font-weight="700" fill="#12301f">FAQ Auto-Reply</text><text x="269" y="248" font-family="system-ui,sans-serif" font-size="13" fill="#5b7466">answers instantly</text></g>
-</svg>`;
 
 const NAV = `
 <nav class="top" aria-label="Main">
@@ -302,7 +295,14 @@ const HOME = {
     <a class="cta big" href="/app">Open the free builder</a>
     <p class="sub">No signup needed to try it · Nothing to install · Works in your browser</p>
   </div>
-  <div>${HERO_SVG}</div>
+  <div class="videowrap">
+    <video controls muted playsinline preload="none" poster="/demo-poster.jpg" width="1920" height="1080"
+      aria-label="70-second FlowBot demo: load a restaurant template, tour the flowchart, book a table in the live simulator">
+      <source src="/demo.mp4" type="video/mp4" />
+      Your browser doesn't support embedded video — <a href="/demo.mp4">download the demo</a> instead.
+    </video>
+    <p class="sub" style="text-align:center">▶ 70-second demo — recorded in the real builder</p>
+  </div>
 </div>
 
 <section>
@@ -311,17 +311,6 @@ const HOME = {
       <div class="ownbig">🔑 The API can be anyone's. The bot is 100% yours.</div>
       <p>Plug in Meta, Twilio, Green API or Whapi.cloud — your choice, your account. FlowBot never sits between you and your customers, and you can <a href="/export-whatsapp-bot-code">export the complete source code</a> any time. No lock-in, no monthly platform fee, no one holding your bot hostage.</p>
     </div>
-  </div>
-</section>
-
-<section>
-  <h2>Watch FlowBot in action — 70 seconds</h2>
-  <p>Load a restaurant template, tour the flowchart, then book a table in the live simulator — recorded in the real builder, exactly as you'll use it.</p>
-  <div class="videowrap">
-    <video controls muted playsinline preload="none" poster="/demo-poster.jpg" width="1920" height="1080">
-      <source src="/demo.mp4" type="video/mp4" />
-      Your browser doesn't support embedded video — <a href="/demo.mp4">download the demo</a> instead.
-    </video>
   </div>
 </section>
 
