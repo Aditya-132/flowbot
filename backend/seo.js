@@ -126,6 +126,15 @@ nav.top a:hover{color:#0e7a4b}
 .videowrap{margin-top:18px}
 .hero .videowrap{margin-top:0}
 .hero .videowrap .sub{margin-top:10px}
+.promoband{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:linear-gradient(135deg,#0b2818,#0e7a4b);border-radius:14px;padding:16px 20px;color:#eafff2;margin:6px 0 18px;font-size:15px}
+.promoband a.cta{flex-shrink:0}
+.exitwrap{position:fixed;inset:0;background:rgba(11,40,24,.55);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+.exitwrap[hidden]{display:none}
+.exitcard{background:#fff;border-radius:18px;max-width:430px;width:100%;padding:28px;text-align:center;box-shadow:0 24px 60px rgba(11,40,24,.35)}
+.exitcard .exitemoji{font-size:36px;margin-bottom:6px}
+.exitcard h3{margin:0 0 8px;font-size:22px}
+.exitcard p{margin:0 0 18px;color:#44604f;font-size:15px}
+.exitclose{display:block;margin:12px auto 0;border:none;background:none;color:#5b7466;font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit}
 .videowrap video{width:100%;height:auto;display:block;border-radius:16px;border:1px solid #dbe7de;box-shadow:0 14px 40px rgba(11,40,24,.16);background:#0b2818}
 .hero svg{max-width:100%;height:auto}
 section{padding:26px 0}
@@ -207,6 +216,31 @@ const FOOTER = `
   <p style="margin-top:26px">© ${new Date().getFullYear()} FlowBot</p>
 </div></footer>`;
 
+// Exit-intent CTA: shown once per session when the cursor leaves through the
+// top of the viewport (headed for the back button / tab bar). Desktop only —
+// deliberately NOT a history/back-button hijack, which Chrome neutralizes and
+// Google classes as an abusive experience.
+const EXIT_CTA = `
+<div class="exitwrap" id="exitcta" hidden>
+  <div class="exitcard">
+    <div class="exitemoji">👋</div>
+    <h3>Before you go back…</h3>
+    <p>The bot you're comparing platforms for? Build it <strong>free</strong> right now — no signup, live simulator, and you keep the full code.</p>
+    <a class="cta" href="/app">Open the free builder</a>
+    <button class="exitclose" id="exitclose">No thanks, keep reading</button>
+  </div>
+</div>
+<script>(function(){var w=document.getElementById("exitcta");if(!w||!matchMedia("(pointer:fine)").matches)return;
+try{if(sessionStorage.getItem("fb_exit"))return}catch(e){}
+document.addEventListener("mouseout",function(e){
+  if(e.clientY>8||e.relatedTarget||!w.hidden)return;
+  w.hidden=false;
+  try{sessionStorage.setItem("fb_exit","1")}catch(e){}
+});
+w.addEventListener("click",function(e){if(e.target===w)w.hidden=true});
+document.getElementById("exitclose").addEventListener("click",function(){w.hidden=true});
+})();</script>`;
+
 const CTA_BAND = `
 <div class="ctaband">
   <h2>Build your WhatsApp bot in minutes — free</h2>
@@ -272,6 +306,7 @@ ${page.body}
 ${page.faqs && page.faqs.length ? `<section id="faq"><h2>Frequently asked questions</h2>${faqHtml(page.faqs)}</section>` : ""}
 ${CTA_BAND}
 </main>
+${page.exitIntent ? EXIT_CTA : ""}
 ${FOOTER}
 </body>
 </html>`;

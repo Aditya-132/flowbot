@@ -764,7 +764,16 @@ const VS_PAGES = [
   }),
 ];
 
-const pages = [HUB, WATI, AISENSY, INTERAKT, MANYCHAT, LANDBOT, GALLABOX, TWILIO_STUDIO, WA_BUSINESS_APP, CHATFUEL, TIDIO, BOTPRESS, RESPOND_IO, SLEEKFLOW, ZOKO, DOUBLETICK, YELLOW_AI, ...VS_PAGES];
+// Promo band right under the h1 — the "hero" of every comparison page —
+// plus an exit-intent CTA (renderPage shows it when the cursor heads for
+// the back button; no history manipulation, so no abusive-experience risk).
+const PROMO = `<div class="promoband">
+  <div><strong>⚡ Skip the subscription — build your WhatsApp bot free while you compare.</strong><br>Drag &amp; drop builder, live simulator, your own provider — and you keep the full code.</div>
+  <a class="cta" href="/app">Open the free builder</a>
+</div>`;
+
+const pages = [HUB, WATI, AISENSY, INTERAKT, MANYCHAT, LANDBOT, GALLABOX, TWILIO_STUDIO, WA_BUSINESS_APP, CHATFUEL, TIDIO, BOTPRESS, RESPOND_IO, SLEEKFLOW, ZOKO, DOUBLETICK, YELLOW_AI, ...VS_PAGES]
+  .map((p) => ({ ...p, body: PROMO + p.body, exitIntent: true }));
 
 // sitemap/llms entries (same shape docs.entries uses)
 const entries = pages.map((p) => ({ path: p.path, title: p.title, desc: p.desc, priority: p.priority, changefreq: p.changefreq }));
