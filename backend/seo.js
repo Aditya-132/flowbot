@@ -7,7 +7,7 @@
 // ============================================================
 
 const CANONICAL = "https://flochatbot.com";
-const LASTMOD = "2026-07-15"; // bump when page copy changes
+const LASTMOD = "2026-07-16"; // bump when page copy changes
 
 /* ------------------------------ helpers ------------------------------ */
 
@@ -84,6 +84,18 @@ const appJsonLd = {
   ],
 };
 
+const videoJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  name: "FlowBot demo — build a WhatsApp bot as a flowchart",
+  description:
+    "Load a restaurant template, edit blocks on the canvas, book a table in the live simulator, and see the bot's exportable code — all inside FlowBot's free WhatsApp bot builder.",
+  thumbnailUrl: `${CANONICAL}/demo-poster.jpg`,
+  contentUrl: `${CANONICAL}/demo.mp4`,
+  uploadDate: "2026-07-16",
+  duration: "PT1M10S",
+};
+
 /* ------------------------------ layout ------------------------------ */
 
 const CSS = `
@@ -111,6 +123,8 @@ nav.top a:hover{color:#0e7a4b}
 .ownbanner .ownbig{font-size:clamp(20px,3vw,26px);font-weight:800;color:#fff;margin-bottom:8px}
 .ownbanner p{margin:0;color:#c9ead6;font-size:16px}
 .ownbanner a{color:#8fe0ae;font-weight:700}
+.videowrap{margin-top:18px}
+.videowrap video{width:100%;height:auto;display:block;border-radius:16px;border:1px solid #dbe7de;box-shadow:0 14px 40px rgba(11,40,24,.16);background:#0b2818}
 .hero svg{max-width:100%;height:auto}
 section{padding:26px 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:18px}
@@ -210,7 +224,7 @@ const CTA_BAND = `
 function renderPage(page) {
   const url = `${CANONICAL}${page.path}`;
   const jsonLd = [];
-  if (page.path === "/") jsonLd.push(appJsonLd, websiteJsonLd, orgJsonLd);
+  if (page.path === "/") jsonLd.push(appJsonLd, websiteJsonLd, orgJsonLd, videoJsonLd);
   else jsonLd.push(breadcrumbJsonLd(page), orgJsonLd);
   if (page.faqs && page.faqs.length) jsonLd.push(faqJsonLd(page.faqs));
 
@@ -297,6 +311,17 @@ const HOME = {
       <div class="ownbig">🔑 The API can be anyone's. The bot is 100% yours.</div>
       <p>Plug in Meta, Twilio, Green API or Whapi.cloud — your choice, your account. FlowBot never sits between you and your customers, and you can <a href="/export-whatsapp-bot-code">export the complete source code</a> any time. No lock-in, no monthly platform fee, no one holding your bot hostage.</p>
     </div>
+  </div>
+</section>
+
+<section>
+  <h2>Watch FlowBot in action — 70 seconds</h2>
+  <p>Load a restaurant template, tour the flowchart, then book a table in the live simulator — recorded in the real builder, exactly as you'll use it.</p>
+  <div class="videowrap">
+    <video controls muted playsinline preload="none" poster="/demo-poster.jpg" width="1920" height="1080">
+      <source src="/demo.mp4" type="video/mp4" />
+      Your browser doesn't support embedded video — <a href="/demo.mp4">download the demo</a> instead.
+    </video>
   </div>
 </section>
 
