@@ -182,6 +182,9 @@ const FOOTER = `
     <div>
       <h4>FlowBot</h4>
       <p>Free drag-and-drop WhatsApp bot builder. Design it as a flowchart, test it live, launch it — or take the code with you.</p>
+      <a href="https://smollaunch.com" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px">
+        <img src="https://smollaunch.com/badges/featured.svg" alt="FlowBot — Featured on Smol Launch" loading="lazy" width="250" height="60" style="max-width:100%;height:auto" />
+      </a>
     </div>
     <div>
       <h4>Use cases</h4>
