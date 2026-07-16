@@ -34,7 +34,7 @@ const HUB = {
   priority: "0.8",
   changefreq: "monthly",
   title: "FlowBot vs Wati, AiSensy, Tidio, Chatfuel, Twilio Studio & More",
-  desc: "Honest comparisons of FlowBot with 16 WhatsApp bot platforms — Wati, AiSensy, Interakt, ManyChat, Landbot, Gallabox, Twilio Studio, Chatfuel, Tidio, Botpress, Respond.io, SleekFlow, Zoko, DoubleTick, Yellow.ai and the WhatsApp Business App.",
+  desc: "Honest comparisons of FlowBot with 21 WhatsApp bot platforms — Wati, AiSensy, Interakt, ManyChat, Landbot, Gallabox, Twilio Studio, Chatfuel, Tidio, Botpress, Respond.io, SleekFlow, Zoko, DoubleTick, Yellow.ai, Zixflow, QuickReply, KwiqReply, WANotifier, Walytic and the WhatsApp Business App.",
   h1: "How FlowBot compares to other WhatsApp bot platforms",
   body: `
 <p class="lead">Most WhatsApp bot tools are paid, managed platforms that keep your bot in their cloud. <a href="/">FlowBot</a> is different: the builder is free, you bring your own WhatsApp provider, and you can export your bot's full source code at any time. Here's how it stacks up against the tools people compare it with — with an honest note on when each competitor is the better pick.</p>
@@ -56,6 +56,11 @@ const HUB = {
   <div class="card"><h3><a href="/zoko-alternative">FlowBot vs Zoko</a></h3><p>Store conversations free; Zoko keeps the Shopify checkout crown.</p></div>
   <div class="card"><h3><a href="/doubletick-alternative">FlowBot vs DoubleTick</a></h3><p>The bot side of WhatsApp sales, without per-user pricing.</p></div>
   <div class="card"><h3><a href="/yellow-ai-alternative">FlowBot vs Yellow.ai</a></h3><p>The small-business answer to an enterprise platform.</p></div>
+  <div class="card"><h3><a href="/zixflow-alternative">FlowBot vs Zixflow</a></h3><p>The bot without the per-seat CRM subscription.</p></div>
+  <div class="card"><h3><a href="/quickreply-alternative">FlowBot vs QuickReply.ai</a></h3><p>The store bot, free — campaigns suite optional.</p></div>
+  <div class="card"><h3><a href="/kwiqreply-alternative">FlowBot vs KwiqReply</a></h3><p>Same official API, but the bot stays yours.</p></div>
+  <div class="card"><h3><a href="/wanotifier-alternative">FlowBot vs WANotifier</a></h3><p>Same bring-your-own-API idea — grown into full two-way bots.</p></div>
+  <div class="card"><h3><a href="/walytic-alternative">FlowBot vs Walytic</a></h3><p>Beyond bulk sends: flows that answer, ask and book.</p></div>
 </div>
 
 <h2>Comparing two other platforms?</h2>
@@ -613,6 +618,175 @@ ${CTA_NOTE}`,
   ],
 };
 
+/* ---------------- smaller / newer competitors (July 2026) ----------------
+   Spotted ranking in the same SERPs as the big BSPs; lower competition on
+   their brand-name queries. Deliberately no outbound links to any vendor. */
+
+const ZIXFLOW = {
+  path: "/zixflow-alternative",
+  crumb: "Zixflow alternative",
+  priority: "0.7",
+  changefreq: "monthly",
+  title: "Zixflow Alternative — Free WhatsApp Bot Builder, No Per-Seat Fees",
+  desc: "A Zixflow alternative for the WhatsApp bot itself: FlowBot builds flows free — no per-seat pricing, your own provider, full Node.js code export. Honest comparison inside.",
+  h1: "A free Zixflow alternative for WhatsApp bots",
+  body: `
+<p class="lead">Zixflow bundles a CRM, outreach campaigns and WhatsApp automation into one per-seat subscription. That's a lot of surface area — and a lot of pricing — if what you actually need is the WhatsApp bot. <a href="/">FlowBot</a> does the bot part free, and you keep the code.</p>
+
+${table("Zixflow", [
+  ["Price to build bots", "Free", "Paid stacks, per-seat pricing on top"],
+  ["Model", "Bot builder you own", "All-in-one CRM + engagement cloud"],
+  ["Own / export the code", "Yes — Node.js ZIP", "No"],
+  ["Provider choice", "Meta, Twilio, Green API, Whapi", "Managed channel"],
+  ["Best at", "Free ownable bots", "CRM views, multi-channel outreach sequences"],
+])}
+${DISCLAIMER}
+
+<h2>Do you need the CRM, or the bot?</h2>
+<p>Zixflow's pitch is the full stack: contacts in kanban views, SMS + email + WhatsApp sequences, a unified inbox. If your team will genuinely work out of that CRM, it can earn its seats. But the bot layer — menus, FAQs, lead capture, bookings — doesn't need a subscription. FlowBot builds it as a <a href="/chatbot-flow-builder">flowchart</a>, runs it on your own provider account, and its HTTP Request block can push every captured lead into whatever CRM you already use.</p>
+
+${TRADEOFF}
+<p>If an all-in-one CRM with outreach sequences is what your sales team runs on, Zixflow is a fair pick. For the WhatsApp bot itself — free and exportable — use FlowBot.</p>
+${CTA_NOTE}`,
+  faqs: [
+    { q: "Is FlowBot cheaper than Zixflow?", a: "FlowBot's builder is free with no per-seat pricing; you pay only your WhatsApp provider's message costs. Zixflow is a paid subscription with additional per-user fees, because it bundles a CRM and multi-channel outreach." },
+    { q: "Can FlowBot send my leads to a CRM like Zixflow does?", a: "Yes — FlowBot's Collect blocks save answers as variables, and the HTTP Request block can post them to any CRM or webhook (HubSpot, Zoho, Google Sheets via API, or Zixflow itself). You're not locked to one stack." },
+    { q: "Can I export my bot from FlowBot?", a: "Yes — one click downloads the complete bot as a standalone Node.js + Express project. That's the structural difference: with any managed platform, the automation stays in their cloud." },
+  ],
+};
+
+const QUICKREPLY = {
+  path: "/quickreply-alternative",
+  crumb: "QuickReply.ai alternative",
+  priority: "0.7",
+  changefreq: "monthly",
+  title: "QuickReply.ai Alternative — Free WhatsApp Store Bot You Own",
+  desc: "A QuickReply.ai alternative for e-commerce WhatsApp: FlowBot builds catalog, order and support bots free — your own provider, full code export, no subscription.",
+  h1: "A free QuickReply.ai alternative for store bots",
+  body: `
+<p class="lead">QuickReply.ai targets e-commerce brands with WhatsApp campaigns — abandoned-cart nudges, order updates, broadcast marketing — on a subscription. If the part you need is the <em>conversational bot</em> for your store, <a href="/">FlowBot</a> builds it free, with a working e-commerce template to start from.</p>
+
+${table("QuickReply.ai", [
+  ["Price to build bots", "Free", "Paid plans"],
+  ["Model", "Bot builder you own", "Managed e-commerce marketing suite"],
+  ["Own / export the code", "Yes — Node.js ZIP", "No"],
+  ["Provider choice", "Meta, Twilio, Green API, Whapi", "Managed channel"],
+  ["Best at", "Free ownable store bots", "Shopify-style campaign automations"],
+])}
+${DISCLAIMER}
+
+<h2>The store bot, without the suite</h2>
+<p>FlowBot's <a href="/whatsapp-bot-for-ecommerce">e-commerce template</a> ships the conversational side ready-made: product catalog with search, order-status lookups, payment links, coupons, human handoff. Wire it to your store's API with the HTTP Request block, test it in the simulator, and launch on your own number. Broadcasts are included for simple announcements; what FlowBot doesn't do is deep cart-recovery campaign automation — that's the part QuickReply.ai charges for.</p>
+
+${TRADEOFF}
+<p>If automated cart-recovery campaigns move real revenue for your store, a paid suite like QuickReply.ai can justify itself. For the store bot customers actually chat with — free and yours — use FlowBot.</p>
+${CTA_NOTE}`,
+  faqs: [
+    { q: "Can FlowBot handle abandoned-cart recovery like QuickReply.ai?", a: "Not as an automated campaign engine — that's QuickReply.ai's specialty. FlowBot covers the conversational side: catalog, order status, payment links, support flows and simple broadcasts, free. Many stores run both jobs separately." },
+    { q: "Does FlowBot integrate with my store?", a: "Yes — the HTTP Request block calls any API (Shopify, WooCommerce or your own backend) mid-conversation, so the bot can look up orders or stock live. And because you can export the code, developers can extend it without limits." },
+    { q: "What does FlowBot cost for an online store?", a: "Nothing for the builder, templates, simulator, widget and code export — you pay only your WhatsApp provider's message costs. There's no subscription tier gating the catalog or order-status blocks." },
+  ],
+};
+
+const KWIQREPLY = {
+  path: "/kwiqreply-alternative",
+  crumb: "KwiqReply alternative",
+  priority: "0.7",
+  changefreq: "monthly",
+  title: "KwiqReply Alternative — Free WhatsApp Bot Builder (Code Export)",
+  desc: "A KwiqReply alternative without the platform subscription: FlowBot builds WhatsApp bots free on your own provider account and exports the complete Node.js code. Honest comparison.",
+  h1: "A free KwiqReply alternative",
+  body: `
+<p class="lead">KwiqReply is a smaller Wati-style platform on the official WhatsApp Business API — shared inbox, broadcasts, AI agents, CRM integrations — sold as a subscription. <a href="/">FlowBot</a> flips the model for the bot itself: build free, bring your own provider, keep the source code.</p>
+
+${table("KwiqReply", [
+  ["Price to build bots", "Free", "Paid platform plans"],
+  ["Model", "Bot builder you own", "Managed API platform + CRM"],
+  ["Own / export the code", "Yes — Node.js ZIP", "No"],
+  ["Provider choice", "Meta, Twilio, Green API, Whapi", "Managed BSP channel"],
+  ["Best at", "Free ownable bots", "Managed inbox, broadcasts, done-for-you setup"],
+])}
+${DISCLAIMER}
+
+<h2>Same official API — different ownership</h2>
+<p>Both products can run on Meta's official WhatsApp Cloud API. The difference is who holds the bot: on a managed platform your flows live in their dashboard and stop working when the subscription does. FlowBot's flows run on your own Meta (or Twilio, Green API, Whapi) account, include a free <a href="/docs">live inbox with human takeover</a>, and can leave with you as an <a href="/export-whatsapp-bot-code">exported Node.js project</a> whenever you want.</p>
+
+${TRADEOFF}
+<p>If you want someone to manage the whole channel for you — onboarding, templates, campaigns — a platform like KwiqReply earns its fee. If you want the bot free and permanent, use FlowBot.</p>
+${CTA_NOTE}`,
+  faqs: [
+    { q: "How is FlowBot different from KwiqReply?", a: "KwiqReply is a managed subscription platform (inbox, broadcasts, AI agents) where your automation lives in their cloud. FlowBot is a free builder: design the flow visually, run it on your own provider account, and export the full source code any time." },
+    { q: "Does FlowBot support the official WhatsApp API like KwiqReply?", a: "Yes — Meta's WhatsApp Cloud API is a one-panel connection, and Twilio's official channel is supported too. Green API and Whapi.cloud are there if you want to start without Meta's business verification." },
+    { q: "Is there really no subscription with FlowBot?", a: "None — builder, templates, simulator, widget, inbox, analytics and code export are free. Your only cost is what your WhatsApp provider charges for messages." },
+  ],
+};
+
+const WANOTIFIER = {
+  path: "/wanotifier-alternative",
+  crumb: "WANotifier alternative",
+  priority: "0.7",
+  changefreq: "monthly",
+  title: "WANotifier Alternative — Free WhatsApp Bots on Your Own Meta API",
+  desc: "A WANotifier alternative for two-way bots: FlowBot shares the bring-your-own-Meta-API model but builds full conversational flows free — any stack, not just WordPress, with code export.",
+  h1: "A WANotifier alternative for real two-way bots",
+  body: `
+<p class="lead">WANotifier deserves credit: like <a href="/">FlowBot</a>, it runs on <em>your own</em> Meta WhatsApp Cloud API account instead of reselling it. Its home turf is WordPress — WooCommerce order notifications, form-triggered messages, campaigns. FlowBot picks up where notifications end: full two-way conversational bots, on any stack.</p>
+
+${table("WANotifier", [
+  ["Bring your own Meta API", "Yes", "Yes — same philosophy"],
+  ["Core job", "Two-way conversational bots", "Notifications & campaigns from WordPress"],
+  ["Works without WordPress", "Yes — any site or stack", "WordPress-centric"],
+  ["Own / export the code", "Yes — Node.js ZIP", "No"],
+  ["Best at", "Menus, bookings, orders, support flows", "WooCommerce alerts, bulk template sends"],
+])}
+${DISCLAIMER}
+
+<h2>Notifications vs conversations</h2>
+<p>Order-shipped alerts are one-way. The moment a customer replies — "can I change the address?", "what else do you have?" — you need a flow that understands options, collects answers and hands off to a human. That's FlowBot's whole product: a <a href="/chatbot-flow-builder">drag-and-drop flowchart</a> with 40+ blocks, a live simulator, a free web widget, and <a href="/export-whatsapp-bot-code">code export</a>. It runs beside any notification tool on the same Meta account's webhook rules — or you can consolidate both jobs into one exported bot.</p>
+
+${TRADEOFF}
+<p>If all you need is WooCommerce notifications inside WordPress, WANotifier is a sensible, honest tool. When customers start replying, build the conversation in FlowBot — free, and portable beyond WordPress.</p>
+${CTA_NOTE}`,
+  faqs: [
+    { q: "Are FlowBot and WANotifier the same kind of tool?", a: "They share the bring-your-own-Meta-API philosophy, but split the job: WANotifier sends notifications and campaigns from WordPress; FlowBot builds interactive two-way bots — menus, bookings, order flows, human handoff — on any stack, exportable as code." },
+    { q: "I run WooCommerce — which one do I need?", a: "For order-status alerts alone, WANotifier covers it. If customers reply and you want the conversation handled — FAQs, returns, upsells, support — that's a FlowBot flow. The two can coexist on one Meta account, or an exported FlowBot project can do both." },
+    { q: "Does FlowBot need WordPress?", a: "No — it's fully web-based, works with any site or none, and the same bot can run as a website chat widget with one script tag. The exported code is a standalone Node.js project." },
+  ],
+};
+
+const WALYTIC = {
+  path: "/walytic-alternative",
+  crumb: "Walytic alternative",
+  priority: "0.7",
+  changefreq: "monthly",
+  title: "Walytic Alternative — Free WhatsApp Bot Builder, Not Just Bulk Sends",
+  desc: "A Walytic alternative when broadcasts aren't enough: FlowBot builds real conversational WhatsApp bots free — official API or linked-device providers, full code export, no lock-in.",
+  h1: "A Walytic alternative for bots, not just broadcasts",
+  body: `
+<p class="lead">Walytic is a low-cost bulk-messaging tool: connect numbers by QR scan (the linked-device method, not the official API), send broadcasts and drips at a flat monthly price. <a href="/">FlowBot</a> plays a different position — it builds the <em>interactive bot</em> that answers, asks and books — and it's free.</p>
+
+${table("Walytic", [
+  ["Core job", "Conversational bots (menus, bookings, orders)", "Bulk broadcasts & drip sequences"],
+  ["Price", "Free", "Flat monthly plans"],
+  ["Connection method", "Official API (Meta, Twilio) or linked-device (Green API, Whapi)", "Linked-device (QR scan)"],
+  ["Own / export the code", "Yes — Node.js ZIP", "No"],
+  ["Best at", "Two-way flows customers reply to", "Cheap outbound volume"],
+])}
+${DISCLAIMER}
+
+<h2>Outbound blasts vs two-way flows</h2>
+<p>A broadcast gets attention; the replies are where business happens. FlowBot turns those replies into structured flows — numbered menus, collected answers saved as variables, payment links, human handoff — built on a visual canvas and tested in a live simulator. Simple broadcasts are included too. And on connection methods, FlowBot gives you the choice Walytic doesn't: start on a linked-device provider (Green API, Whapi.cloud) with no Meta verification, or run on the official Cloud API when reliability matters — same flow either way.</p>
+
+${TRADEOFF}
+<p>If your only job is pushing bulk sends at the lowest flat price, Walytic is built for exactly that. When you need the conversation handled — and the option of the official API — build it free in FlowBot.</p>
+${CTA_NOTE}`,
+  faqs: [
+    { q: "Is FlowBot a bulk WhatsApp sender like Walytic?", a: "No — FlowBot is a bot builder with simple broadcasts included. Its core is two-way flows: menus, questions, bookings, order lookups, human handoff. If you only need mass outbound sends, a dedicated bulk tool fits; if messages come back, you need a flow." },
+    { q: "Does FlowBot support the QR / linked-device method like Walytic?", a: "Yes, through Green API and Whapi.cloud — connect a number without Meta's business verification. Unlike a bulk sender, the same flow can later move to the official Meta Cloud API or Twilio without rebuilding anything." },
+    { q: "What does FlowBot cost compared to Walytic's plans?", a: "FlowBot is free — builder, simulator, widget, inbox and code export included. You pay only your provider's costs (Green API/Whapi subscriptions or Meta's per-conversation rates). There's no FlowBot plan to outgrow." },
+  ],
+};
+
 /* ------------------- third-party "X vs Y" comparisons -------------------
    Search Console shows queries like "wati vs aisensy" and "wati vs gallabox"
    surfacing our alternative pages. These pages answer that exact question
@@ -703,7 +877,7 @@ ${DISCLAIMER}
 
 <h2>The third option: build the bot free and own it</h2>
 <p>If what you actually need from ${a.name} or ${b.name} is <em>the WhatsApp bot itself</em> — menus, FAQs, bookings, orders, lead capture — you may not need a subscription at all. <a href="/">FlowBot</a> builds the bot as a drag-and-drop flowchart, free: test it in a live simulator, launch it on your own provider account (Meta Cloud API, Twilio, Green API or Whapi.cloud) and <a href="/export-whatsapp-bot-code">export the complete Node.js code</a> whenever you like. A live inbox with human takeover, funnel analytics and a website chat widget are included. What it isn't: a managed BSP with a multi-agent campaign suite — that's exactly the part ${a.name} and ${b.name} charge for.</p>
-<p>Full comparisons: <a href="${a.alt}">FlowBot vs ${a.name}</a> · <a href="${b.alt}">FlowBot vs ${b.name}</a> · <a href="/whatsapp-bot-comparisons">all 16 platforms</a>.</p>
+<p>Full comparisons: <a href="${a.alt}">FlowBot vs ${a.name}</a> · <a href="${b.alt}">FlowBot vs ${b.name}</a> · <a href="/whatsapp-bot-comparisons">the full comparison hub</a>.</p>
 ${CTA_NOTE}`,
     faqs: [
       {
@@ -772,7 +946,7 @@ const PROMO = `<div class="promoband">
   <a class="cta" href="/app">Open the free builder</a>
 </div>`;
 
-const pages = [HUB, WATI, AISENSY, INTERAKT, MANYCHAT, LANDBOT, GALLABOX, TWILIO_STUDIO, WA_BUSINESS_APP, CHATFUEL, TIDIO, BOTPRESS, RESPOND_IO, SLEEKFLOW, ZOKO, DOUBLETICK, YELLOW_AI, ...VS_PAGES]
+const pages = [HUB, WATI, AISENSY, INTERAKT, MANYCHAT, LANDBOT, GALLABOX, TWILIO_STUDIO, WA_BUSINESS_APP, CHATFUEL, TIDIO, BOTPRESS, RESPOND_IO, SLEEKFLOW, ZOKO, DOUBLETICK, YELLOW_AI, ZIXFLOW, QUICKREPLY, KWIQREPLY, WANOTIFIER, WALYTIC, ...VS_PAGES]
   .map((p) => ({ ...p, body: PROMO + p.body, exitIntent: true }));
 
 // sitemap/llms entries (same shape docs.entries uses)
