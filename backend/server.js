@@ -679,9 +679,10 @@ app.get("/robots.txt", (_req, res) => {
 
 const docs = require("./docs");
 const compare = require("./compare");
+const templatePages = require("./template-pages");
 
-// docs + competitor-comparison pages both feed the sitemap and llms.txt
-const extraEntries = [...docs.entries, ...compare.entries];
+// docs + competitor-comparison + template-gallery pages all feed sitemap + llms.txt
+const extraEntries = [...docs.entries, ...compare.entries, ...templatePages.entries];
 
 // Explicit short cache: without a Cache-Control header Railway's edge caches
 // these for hours, so crawlers kept getting a pre-deploy sitemap.
@@ -693,8 +694,8 @@ app.get("/llms.txt", (_req, res) => {
   res.set("Cache-Control", "public, max-age=300").type("text/plain").send(seo.llmsTxt(extraEntries));
 });
 
-// Marketing/content pages + competitor-comparison pages are pre-rendered once.
-for (const page of [...seo.pages, ...compare.pages]) {
+// Marketing/content pages + competitor-comparison + template-gallery pages are pre-rendered once.
+for (const page of [...seo.pages, ...compare.pages, ...templatePages.pages]) {
   const html = seo.renderPage(page);
   app.get(page.path, (_req, res) => {
     res.set("Cache-Control", "public, max-age=300").type("html").send(html);

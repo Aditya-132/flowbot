@@ -658,11 +658,11 @@ const TEMPLATES = {
 
 <h2>The templates</h2>
 <div class="grid">
-  <div class="card"><h3>🍛 Spice Villa Restaurant</h3><p>Dish menu with prices, order collection with address, delivery FAQs, feedback. The fastest way to a <a href="/whatsapp-bot-for-restaurants">restaurant ordering bot</a>.</p></div>
-  <div class="card"><h3>🏨 Hotel Paradise</h3><p>A 77-block concierge: room catalog, bookings, room service, local tips, language routing, front-desk handoff. See <a href="/whatsapp-bot-for-hotels">hotel bots</a>.</p></div>
-  <div class="card"><h3>🛍️ TrendKart Online Store</h3><p>Product catalog, keyword search, deal card, order tracking, returns policy, review requests. See <a href="/whatsapp-bot-for-ecommerce">e-commerce bots</a>.</p></div>
-  <div class="card"><h3>🏦 SafeBank Assistant</h3><p>Balance/branch FAQs, secure-tone messaging, lead qualification for loans, human handoff for sensitive queries.</p></div>
-  <div class="card"><h3>♟️ GrandMaster Chess Academy</h3><p>Course catalog with prices, batch booking, trial-class collection — a pattern that fits any classes or coaching business.</p></div>
+  <div class="card"><h3>🍛 Spice Villa Restaurant</h3><p>Dish menu with prices, order collection with address, delivery FAQs, feedback. The fastest way to a <a href="/whatsapp-bot-for-restaurants">restaurant ordering bot</a>.</p><p><a href="/whatsapp-bot-templates/spice-villa-restaurant">Try this template →</a></p></div>
+  <div class="card"><h3>🏨 Hotel Paradise</h3><p>A 77-block concierge: room catalog, bookings, room service, local tips, language routing, front-desk handoff. See <a href="/whatsapp-bot-for-hotels">hotel bots</a>.</p><p><a href="/whatsapp-bot-templates/hotel-paradise-concierge">Try this template →</a></p></div>
+  <div class="card"><h3>🛍️ TrendKart Online Store</h3><p>Product catalog, keyword search, deal card, order tracking, returns policy, review requests. See <a href="/whatsapp-bot-for-ecommerce">e-commerce bots</a>.</p><p><a href="/whatsapp-bot-templates/trendkart-online-store">Try this template →</a></p></div>
+  <div class="card"><h3>🏦 SafeBank Assistant</h3><p>Balance/branch FAQs, secure-tone messaging, lead qualification for loans, human handoff for sensitive queries.</p><p><a href="/whatsapp-bot-templates/safebank-assistant">Try this template →</a></p></div>
+  <div class="card"><h3>♟️ GrandMaster Chess Academy</h3><p>Course catalog with prices, batch booking, trial-class collection — a pattern that fits any classes or coaching business.</p><p><a href="/whatsapp-bot-templates/grandmaster-chess-academy">Try this template →</a></p></div>
 </div>
 
 <h2>Make it yours</h2>

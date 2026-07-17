@@ -500,6 +500,15 @@ function Builder({ user, onAuthed, onLogout }) {
   const [bcMsg, setBcMsg] = useState("");
   const [bcBusy, setBcBusy] = useState(false);
 
+  // /app?template=KEY — preload a ready-made template (from the template gallery pages)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get("template");
+    if (!key || params.get("clone") || !TEMPLATES[key]) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    loadTemplate(key);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // /app?clone=KEY — load a publicly shared bot onto the canvas as a copy
   useEffect(() => {
     const key = new URLSearchParams(window.location.search).get("clone");
