@@ -235,11 +235,51 @@ ${CROSS}
   ],
 };
 
+const GYM = {
+  key: "gym",
+  path: "/whatsapp-bot-templates/powerfit-gym",
+  crumb: "Gym/fitness bot template",
+  priority: "0.7",
+  changefreq: "monthly",
+  title: "Gym WhatsApp Bot Template — Free Trial Booking & Memberships",
+  desc: "Load PowerFit Gym, a free 17-block WhatsApp bot template for gyms & fitness studios: free-trial booking, membership plans with payment, class timings, location, FAQ and trainer handoff. Try it live.",
+  h1: "PowerFit Gym — a free gym & fitness WhatsApp bot template",
+  body: `
+<article class="doc">
+<p class="lead"><strong>PowerFit Gym</strong> is a ready-to-launch bot for gyms, fitness studios and personal trainers — 17 blocks that turn WhatsApp into a front desk: book free trials, sell memberships, share class timings and answer the questions members ask all day. Load it into the <a href="/app">builder</a>, rebrand it, and it's your gym's bot.</p>
+
+${flowMap("PowerFit greets the member and offers:", [
+  "🏋️ <strong>Book a FREE trial</strong> — qualifies the fitness goal, collects name and phone, books a slot and confirms the session.",
+  "💳 <strong>Membership plans</strong> — a plan catalog with prices, a new-member coupon (FIT20) and a payment link.",
+  "🗓️ <strong>Class timings</strong> — the weekly schedule plus a Google Maps location.",
+  "❓ <strong>FAQs</strong> — trial, timings, personal training and fees.",
+  "🙋 <strong>Talk to a trainer</strong> — human handoff.",
+])}
+
+<h2>The reusable fitness pattern</h2>
+<div class="grid">
+  <div class="card"><h3>🎯 Free trial → member</h3><p>Qualify the goal, book a free session, then present paid plans with a first-timer coupon — the classic gym funnel.</p></div>
+  <div class="card"><h3>🗓️ Slot booking</h3><p>Appointment + booking-confirm blocks capture a preferred day/time and reply with a confirmation.</p></div>
+  <div class="card"><h3>💳 Sell memberships</h3><p>Plan catalog, coupon and payment link turn interest into a paid membership inside the chat.</p></div>
+  <div class="card"><h3>🤝 Trainer handoff</h3><p>Anything the bot can't answer routes to a human trainer, with a friendly wait message.</p></div>
+</div>
+
+<h2>Make it yours</h2>
+<p>Rename the gym, swap the plans, prices, class schedule and location for your own, and test the free-trial flow in the simulator before you connect a provider. The same pattern fits yoga studios, CrossFit boxes, dance classes and personal trainers.</p>
+${CROSS}
+</article>`,
+  faqs: [
+    { q: "Is the gym bot template free?", a: "Yes — PowerFit Gym is free to load, edit, launch and export as code, like every FlowBot template. You pay only your WhatsApp provider's message costs." },
+    { q: "Can members book a free trial and pay for memberships in the bot?", a: "Yes. The template qualifies the member's goal, books a trial via the Appointment block, and sells memberships with a plan catalog, a coupon (FIT20) and a Payment Link — all in one flow." },
+    { q: "Does this only work for gyms?", a: "No — every block is editable, so the same free-trial-to-membership pattern fits yoga and dance studios, CrossFit boxes, martial-arts schools and personal trainers." },
+  ],
+};
+
 /* ------------------------------ exports ------------------------------ */
 
 // Prepend the per-template "open this bot" promo band, and show the
 // exit-intent CTA (renderPage handles it) like the comparison pages do.
-const pages = [RESTAURANT, HOTEL, STORE, BANK, CHESS].map((p) => ({
+const pages = [RESTAURANT, HOTEL, STORE, BANK, CHESS, GYM].map((p) => ({
   ...p,
   body: promo(p.key) + p.body,
   exitIntent: true,

@@ -417,4 +417,55 @@ const hotel = {
   ],
 };
 
-export const TEMPLATES = { restaurant, bank, chess, store, hotel };
+/* ---------------- 🏋️ PowerFit Gym — Fitness studio ---------------- */
+const gym = {
+  name: "PowerFit Gym",
+  emoji: "🏋️",
+  desc: "Free-trial booking, membership plans & payment, class timings, location, FAQ, trainer handoff — 17 blocks.",
+  nodes: () => [
+    N("w", "welcome", 0, 2, { message: "🏋️ Welcome to PowerFit Gym! I'm your fitness assistant — book a free trial, check plans and class timings, right here on WhatsApp." }),
+    N("m", "menu", 1, 2, { prompt: "How can I help you at PowerFit today?", options: ["Book a FREE trial", "Membership plans", "Class timings", "FAQs", "Talk to a trainer"] }),
+    // — Free trial —
+    N("goal", "lead_qualify", 2, 0, { prompt: "Awesome! What's your main fitness goal?", options: ["Lose weight", "Build muscle", "Stay fit & active"] }),
+    N("tname", "collect", 3, 0, { question: "Love it! What name should I book the free trial under?", field: "name" }),
+    N("tphone", "collect_phone", 4, 0, { question: "And your phone number, {name}?", ack: "Got it 👍" }),
+    N("tslot", "appointment", 5, 0, { question: "Which day & time works for your free session? (Mon–Sat, 6 AM – 9 PM)", ack: "Checking the trainer's slots…" }),
+    N("tconfirm", "booking_confirm", 6, 0, { message: "🎉 All set, {name}! Your FREE trial at PowerFit is booked for {appointmentTime}. Come 10 min early — bring water & shoes! 💪" }),
+    // — Membership plans —
+    N("plans", "catalog", 2, 2, { title: "💳 PowerFit membership plans", items: [
+      { name: "1 Month — all access", price: "₹1,999" },
+      { name: "3 Months — all access + 1 PT session", price: "₹4,999" },
+      { name: "12 Months — all access + diet plan", price: "₹14,999" },
+      { name: "Personal Training (per session)", price: "₹600" },
+    ] }),
+    N("mcoup", "coupon", 3, 2, { message: "🎁 New-member offer — 20% off any plan this week:", code: "FIT20" }),
+    N("mpay", "payment_link", 4, 2, { message: "Join now — pay securely here and start today:", url: "https://rzp.io/l/powerfit-join" }),
+    N("review", "review_request", 5, 2, { message: "💚 Loving PowerFit? A quick review helps other members find us: https://g.page/powerfit/review" }),
+    // — Class timings + location —
+    N("classes", "text", 2, 3.6, { message: "🗓️ Class timings (Mon–Sat):\n• Yoga — 6:00 & 7:00 AM\n• HIIT — 8:00 AM & 6:00 PM\n• Zumba — 5:00 PM\n• Strength — 7:00 PM\nGym floor open 5 AM – 11 PM." }),
+    N("loc", "location", 3, 3.6, { title: "PowerFit Gym", address: "2nd Floor, Metro Plaza, FC Road, Pune 411005\nAmple parking · Open 5 AM – 11 PM", mapsUrl: "https://maps.google.com/?q=PowerFit+Gym+FC+Road+Pune" }),
+    // — FAQ —
+    N("faqs", "faq", 2, 5, { pairs: [
+      { k: "trial", a: "Yes! Your first session is a free trial — no card needed. Just book a slot above." },
+      { k: "timing", a: "The gym floor is open 5 AM to 11 PM daily. Group classes run Mon–Sat." },
+      { k: "trainer", a: "Every plan includes a fitness assessment. Personal training is ₹600/session or bundled in the 3-month+ plans." },
+      { k: "fees", a: "Plans start at ₹1,999/month. Use code FIT20 for 20% off your first plan." },
+    ] }),
+    // — Trainer + wrap-up —
+    N("trainer", "human_handoff", 2, 6.4, { message: "🙋 Connecting you to a PowerFit trainer — they'll reply right here in a few minutes." }),
+    N("csat", "csat", 6, 2, { question: "Before you go — rate your experience with me (1–5):", field: "rating", thanks: "Thanks for the {rating}/5! 💪" }),
+    N("bye", "goodbye", 7, 2, { message: "See you at PowerFit! 🏋️ Send any message to start again." }),
+  ],
+  edges: () => [
+    E("w", 0, "m"),
+    E("m", 0, "goal"), E("goal", 0, "tname"), E("goal", 1, "tname"), E("goal", 2, "tname"),
+    E("tname", 0, "tphone"), E("tphone", 0, "tslot"), E("tslot", 0, "tconfirm"), E("tconfirm", 0, "csat"),
+    E("m", 1, "plans"), E("plans", 0, "mcoup"), E("mcoup", 0, "mpay"), E("mpay", 0, "review"), E("review", 0, "csat"),
+    E("m", 2, "classes"), E("classes", 0, "loc"), E("loc", 0, "bye"),
+    E("m", 3, "faqs"), E("faqs", 0, "csat"),
+    E("m", 4, "trainer"), E("trainer", 0, "bye"),
+    E("csat", 0, "bye"),
+  ],
+};
+
+export const TEMPLATES = { restaurant, bank, chess, store, hotel, gym };

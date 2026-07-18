@@ -72,7 +72,7 @@ const appJsonLd = {
     "40+ ready-made WhatsApp feature blocks",
     "Block Lab — build your own custom blocks from steps",
     "AI Builder — describe your bot in chat, get the flowchart",
-    "Ready templates: restaurant, bank, hotel, chess academy, online store",
+    "Ready templates: restaurant, bank, hotel, chess academy, online store, gym",
     "Live chat simulator",
     "Meta Cloud API, Twilio, Green API and Whapi.cloud integrations",
     "HTTP Request block to call any external API",
@@ -370,7 +370,7 @@ const HOME = {
 
 <section>
   <h2>Start from a real template, not a blank canvas</h2>
-  <p>FlowBot includes complete, working bots you can load with one click and make your own: a <a href="/whatsapp-bot-for-restaurants">restaurant ordering bot</a>, a <a href="/whatsapp-bot-for-hotels">77-block hotel concierge</a>, an <a href="/whatsapp-bot-for-ecommerce">online store bot</a> with catalog and order tracking, a bank assistant, and a chess academy bot with class bookings. <a href="/whatsapp-bot-templates">Browse all templates →</a></p>
+  <p>FlowBot includes complete, working bots you can load with one click and make your own: a <a href="/whatsapp-bot-for-restaurants">restaurant ordering bot</a>, a <a href="/whatsapp-bot-for-hotels">77-block hotel concierge</a>, an <a href="/whatsapp-bot-for-ecommerce">online store bot</a> with catalog and order tracking, a bank assistant, a chess academy bot with class bookings, and a gym bot with free-trial booking. <a href="/whatsapp-bot-templates">Browse all templates →</a></p>
 </section>
 
 <section>
@@ -649,7 +649,7 @@ const TEMPLATES = {
   priority: "0.8",
   changefreq: "monthly",
   title: "Free WhatsApp Chatbot Templates — Restaurant, Hotel, Store, Bank",
-  desc: "Five free, complete WhatsApp chatbot templates: restaurant ordering, hotel concierge (77 blocks), online store, bank assistant and chess academy. Load, edit, simulate and launch.",
+  desc: "Six free, complete WhatsApp chatbot templates: restaurant ordering, hotel concierge (77 blocks), online store, bank assistant, chess academy and gym. Load, edit, simulate and launch.",
   h1: "Free WhatsApp chatbot templates",
   body: `
 <article class="doc">
@@ -663,6 +663,7 @@ const TEMPLATES = {
   <div class="card"><h3>🛍️ TrendKart Online Store</h3><p>Product catalog, keyword search, deal card, order tracking, returns policy, review requests. See <a href="/whatsapp-bot-for-ecommerce">e-commerce bots</a>.</p><p><a href="/whatsapp-bot-templates/trendkart-online-store">Try this template →</a></p></div>
   <div class="card"><h3>🏦 SafeBank Assistant</h3><p>Balance/branch FAQs, secure-tone messaging, lead qualification for loans, human handoff for sensitive queries.</p><p><a href="/whatsapp-bot-templates/safebank-assistant">Try this template →</a></p></div>
   <div class="card"><h3>♟️ GrandMaster Chess Academy</h3><p>Course catalog with prices, batch booking, trial-class collection — a pattern that fits any classes or coaching business.</p><p><a href="/whatsapp-bot-templates/grandmaster-chess-academy">Try this template →</a></p></div>
+  <div class="card"><h3>🏋️ PowerFit Gym</h3><p>Free-trial booking, membership plans with payment, class timings, location and trainer handoff — for gyms and fitness studios.</p><p><a href="/whatsapp-bot-templates/powerfit-gym">Try this template →</a></p></div>
 </div>
 
 <h2>Make it yours</h2>
@@ -993,7 +994,7 @@ Key facts:
 - Unique feature: full source-code export — no lock-in
 - Bots also run as an embeddable website chat widget (one script tag) and get public share pages others can try live and clone
 - Built-in per-bot analytics (conversations, messages, channels)
-- Templates: restaurant, hotel (77 blocks), online store, bank, chess academy
+- Templates: restaurant, hotel (77 blocks), online store, bank, chess academy, gym
 
 ## Pages
 
