@@ -93,6 +93,8 @@ function extractIncoming(body) {
 /** Send a plain text WhatsApp message via Whinta. */
 async function sendText(creds, to, text) {
   const url = `${cleanBase(creds.apiUrl)}/send`;
+  // Whinta expects an E.164 phone; wa_id comes through as bare digits.
+  const phone = /^\+/.test(String(to)) ? String(to) : "+" + String(to).replace(/[^\d]/g, "");
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -100,7 +102,7 @@ async function sendText(creds, to, text) {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({ phone: to, message: text }),
+    body: JSON.stringify({ phone, message: text }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
