@@ -447,6 +447,11 @@ app.get("/whinta/_shape", (req, res) => {
   if (req.query.k !== "whinta-debug") return res.sendStatus(404);
   res.json({ last: _whintaLastShape || { none: true }, send: _whintaLastSend });
 });
+app.get("/whinta/_reset", wrap(async (req, res) => {
+  if (req.query.k !== "whinta-debug") return res.sendStatus(404);
+  if (req.query.key) await store.deleteChatSession(String(req.query.key));
+  res.json({ reset: req.query.key || null });
+}));
 app.post("/whinta/webhook/:id", wrap(async (req, res) => {
   _whintaLastShape = { event: (req.body && (req.body.event || req.body.type)) || null, shape: _shapeOf(req.body) };
   const f = await store.get(req.params.id);
