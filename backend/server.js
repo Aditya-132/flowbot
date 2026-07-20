@@ -433,39 +433,16 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
 // Incoming messages: parse Whinta's payload, run the same engine, reply via
 // Whinta's POST /api/send. Whinta also posts Message.Sent/Status events — those
 // are ignored by extractIncoming so the bot never talks to itself.
-let _whintaLastShape = null;
-let _whintaLastSend = null;
-const _shapeOf = (o, d = 0) => {
-  if (o === null || typeof o !== "object" || d > 5) return typeof o;
-  if (Array.isArray(o)) return o.length ? [_shapeOf(o[0], d + 1)] : [];
-  const out = {};
-  for (const k of Object.keys(o).slice(0, 50)) out[k] = _shapeOf(o[k], d + 1);
-  return out;
-};
-// temporary diagnostic: reveals only the KEY STRUCTURE of the last webhook (no values)
-app.get("/whinta/_shape", (req, res) => {
-  if (req.query.k !== "whinta-debug") return res.sendStatus(404);
-  res.json({ last: _whintaLastShape || { none: true }, send: _whintaLastSend });
-});
-app.get("/whinta/_reset", wrap(async (req, res) => {
-  if (req.query.k !== "whinta-debug") return res.sendStatus(404);
-  if (req.query.key) await store.deleteChatSession(String(req.query.key));
-  res.json({ reset: req.query.key || null });
-}));
 app.post("/whinta/webhook/:id", wrap(async (req, res) => {
-  _whintaLastShape = { event: (req.body && (req.body.event || req.body.type)) || null, shape: _shapeOf(req.body) };
   const f = await store.get(req.params.id);
   if (!f || !f.active || f.provider !== "whinta" || !f.whinta) return res.sendStatus(200);
   const incoming = whintaApi.extractIncoming(req.body);
   if (!incoming || !incoming.text) return res.sendStatus(200);
   const replies = await runBot(f, "whinta", incoming.from, incoming.text);
-  _whintaLastSend = { count: replies.length, ok: 0, err: null };
   for (const msg of replies) {
     try {
       await whintaApi.sendText(f.whinta, incoming.from, msg);
-      _whintaLastSend.ok += 1;
     } catch (e) {
-      _whintaLastSend.err = e.message;
       console.error("Whinta send failed:", e.message);
     }
   }
