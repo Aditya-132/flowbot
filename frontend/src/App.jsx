@@ -379,7 +379,7 @@ const nodeSummary = (n) => {
 /* ---------- app shell: builder is open to guests; auth appears as a
    modal only when saving, making blocks, exporting code or activating ---------- */
 /* ---------- inbox display helpers ---------- */
-const CHANNEL_ICON = { twilio: "📞", meta: "🟢", green: "💚", whapi: "📲", widget: "🌐", simulator: "🧪" };
+const CHANNEL_ICON = { twilio: "📞", meta: "🟢", green: "💚", whapi: "📲", whinta: "🟩", widget: "🌐", simulator: "🧪" };
 const convoLabel = (key) => {
   const from = key.split("|").slice(1).join("|");
   if (from.startsWith("web:")) return "Web visitor " + from.slice(4, 10);
@@ -434,6 +434,7 @@ function Builder({ user, onAuthed, onLogout }) {
   const [metaCreds, setMetaCreds] = useState({ accessToken: "", phoneNumberId: "" });
   const [greenCreds, setGreenCreds] = useState({ idInstance: "", apiTokenInstance: "", apiUrl: "https://api.green-api.com" });
   const [whapiCreds, setWhapiCreds] = useState({ token: "", apiUrl: "https://gate.whapi.cloud" });
+  const [whintaCreds, setWhintaCreds] = useState({ token: "", apiUrl: "https://app.whinta.com/api" });
   const [activation, setActivation] = useState(null); // {webhook, verifyToken?}
   const [activated, setActivated] = useState(false);
   const [code, setCode] = useState("");
@@ -700,7 +701,7 @@ function Builder({ user, onAuthed, onLogout }) {
   const refreshBlocks = () => api.listBlocks().then(setCustomBlocks).catch(() => {});
   const markDirty = () => setDirty(true);
   const webhookFor = (p, id) =>
-    p === "meta" ? `/meta/webhook/${id}` : p === "green" ? `/green/webhook/${id}` : p === "whapi" ? `/whapi/webhook/${id}` : `/whatsapp/${id}`;
+    p === "meta" ? `/meta/webhook/${id}` : p === "green" ? `/green/webhook/${id}` : p === "whapi" ? `/whapi/webhook/${id}` : p === "whinta" ? `/whinta/webhook/${id}` : `/whatsapp/${id}`;
 
   /* ---------- persistence ---------- */
   // Returns the bot id on success, null on failure (avoids stale-state reads
@@ -750,6 +751,7 @@ function Builder({ user, onAuthed, onLogout }) {
         apiUrl: f.green?.apiUrl || "https://api.green-api.com",
       });
       setWhapiCreds({ token: "", apiUrl: f.whapi?.apiUrl || "https://gate.whapi.cloud" });
+      setWhintaCreds({ token: "", apiUrl: f.whinta?.apiUrl || "https://app.whinta.com/api" });
       setActivation(f.active ? { webhook: webhookFor(f.provider, f.id), verifyToken: f.meta?.verifyToken } : null);
       setDirty(false); setSel(null); setChat([]); setTab(0);
       flash("📂 Loaded: " + f.name);
@@ -763,6 +765,7 @@ function Builder({ user, onAuthed, onLogout }) {
     setMetaCreds({ accessToken: "", phoneNumberId: "" });
     setGreenCreds({ idInstance: "", apiTokenInstance: "", apiUrl: "https://api.green-api.com" });
     setWhapiCreds({ token: "", apiUrl: "https://gate.whapi.cloud" });
+    setWhintaCreds({ token: "", apiUrl: "https://app.whinta.com/api" });
     setActivation(null);
     setDirty(true); setSel(null); setChat([]); setTab(0);
   }
@@ -950,6 +953,8 @@ function Builder({ user, onAuthed, onLogout }) {
             ? { provider: "green", ...greenCreds }
             : provider === "whapi"
               ? { provider: "whapi", ...whapiCreds }
+              : provider === "whinta"
+                ? { provider: "whinta", ...whintaCreds }
             : creds;
       const r = await api.activate(botId, payload);
       setActivated(true);
@@ -1011,6 +1016,8 @@ function Builder({ user, onAuthed, onLogout }) {
         ? greenCreds.idInstance && greenCreds.apiTokenInstance
         : provider === "whapi"
           ? whapiCreds.token
+          : provider === "whinta"
+            ? whintaCreds.token
         : creds.sid && creds.token && creds.number;
 
   return (
@@ -1841,7 +1848,7 @@ function Builder({ user, onAuthed, onLogout }) {
           <div style={S.credCard}>
             <div style={S.paneTitle}>Connect a provider</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-              {[["meta", "Meta Cloud API"], ["green", "Green API"], ["whapi", "Whapi.cloud"], ["twilio", "Twilio"]].map(([p, label]) => (
+              {[["meta", "Meta Cloud API"], ["whinta", "Whinta"], ["green", "Green API"], ["whapi", "Whapi.cloud"], ["twilio", "Twilio"]].map(([p, label]) => (
                 <button key={p} onClick={() => setProvider(p)}
                   style={{ ...S.tab, flex: 1, ...(provider === p ? S.tabActive : {}) }}>{label}</button>
               ))}
@@ -1902,6 +1909,26 @@ function Builder({ user, onAuthed, onLogout }) {
               <Field label="API URL">
                 <input style={S.input} placeholder="https://gate.whapi.cloud" value={whapiCreds.apiUrl}
                   onChange={(e) => setWhapiCreds({ ...whapiCreds, apiUrl: e.target.value })} />
+              </Field>
+              <button
+                style={{ ...S.primaryBtn, width: "100%", opacity: hasWelcome && providerReady && !busy ? 1 : 0.45 }}
+                disabled={!(hasWelcome && providerReady) || busy}
+                onClick={activateBot}>
+                🚀 Activate bot
+              </button>
+            </>)}
+
+            {provider === "whinta" && (<>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12, lineHeight: 1.5 }}>
+                From <b>app.whinta.com → Developer Tools → Access Token</b> → generate an API key. Your WhatsApp number is already connected inside Whinta; the token stays on your backend.
+              </div>
+              <Field label="API Token">
+                <input style={S.input} type="password" placeholder="Whinta API key (Bearer token)" value={whintaCreds.token}
+                  onChange={(e) => setWhintaCreds({ ...whintaCreds, token: e.target.value })} />
+              </Field>
+              <Field label="API URL">
+                <input style={S.input} placeholder="https://app.whinta.com/api" value={whintaCreds.apiUrl}
+                  onChange={(e) => setWhintaCreds({ ...whintaCreds, apiUrl: e.target.value })} />
               </Field>
               <button
                 style={{ ...S.primaryBtn, width: "100%", opacity: hasWelcome && providerReady && !busy ? 1 : 0.45 }}
@@ -1976,6 +2003,13 @@ function Builder({ user, onAuthed, onLogout }) {
                         {isLocal && <li>Expose the backend: <code style={S.inlineCode}>ngrok http 3001</code>.</li>}
                         <li>Whapi.cloud Channel Settings → Webhooks: add this URL for <b>messages.post</b>.</li>
                         <li>Pair the channel by QR, then message the paired WhatsApp number. Done. 🎉</li>
+                      </ol>
+                    </>) : provider === "whinta" ? (<>
+                      Webhook URL (paste in Whinta → Developer Tools → Webhooks):
+                      <CodeRow text={`${base}/whinta/webhook/${botId}`} label="Webhook URL" />
+                      <ol style={{ margin: 0, paddingLeft: 18 }}>
+                        <li>Whinta → Developer Tools → Webhooks → Add Webhook: paste this URL, select the <b>Message.Received</b> event, save.</li>
+                        <li>Message your connected Whinta WhatsApp number — the bot replies via Whinta's API. Done. 🎉</li>
                       </ol>
                     </>) : (<>
                       Webhook endpoint:

@@ -18,6 +18,7 @@ const { buildZip } = require("./zip");
 const metaApi = require("./meta");
 const greenApi = require("./green");
 const whapi = require("./whapi");
+const whintaApi = require("./whinta");
 const twilioApi = require("./twilio");
 
 const PORT = process.env.PORT || 3001;
@@ -67,6 +68,7 @@ async function sendToCustomer(flow, channel, to, text) {
   if (channel === "meta" && flow.meta) return metaApi.sendText(flow.meta, to, text);
   if (channel === "green" && flow.green) return greenApi.sendText(flow.green, to, text);
   if (channel === "whapi" && flow.whapi) return whapi.sendText(flow.whapi, to, text);
+  if (channel === "whinta" && flow.whinta) return whintaApi.sendText(flow.whinta, to, text);
   if (channel === "widget") return; // delivered by the widget's poll
   throw new Error(`no credentials to send on channel "${channel}"`);
 }
@@ -266,6 +268,21 @@ app.post("/api/flows/:id/activate", wrap(async (req, res) => {
     return res.json({ ok: true, provider: "whapi", webhook: `/whapi/webhook/${f.id}` });
   }
 
+  if (b.provider === "whinta") {
+    // Whinta (app.whinta.com) — WhatsApp CRM. REST send via /api/send + webhook receive.
+    if (!b.token) return res.status(400).json({ error: "token is required" });
+    await store.upsert({
+      id: f.id,
+      provider: "whinta",
+      whinta: {
+        token: b.token,
+        apiUrl: (b.apiUrl || whintaApi.WHINTA_API_BASE).replace(/\/+$/, ""),
+      },
+      active: true,
+    });
+    return res.json({ ok: true, provider: "whinta", webhook: `/whinta/webhook/${f.id}` });
+  }
+
   // default: Twilio
   const { sid, token, number } = b;
   if (!sid || !token || !number) return res.status(400).json({ error: "sid, token and number are required" });
@@ -407,6 +424,40 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
       await whapi.sendText(f.whapi, incoming.from, msg);
     } catch (e) {
       console.error("Whapi send failed:", e.message);
+    }
+  }
+  res.sendStatus(200);
+}));
+
+/* ------------------- Whinta (app.whinta.com) webhook ------------------- */
+// Incoming messages: parse Whinta's payload, run the same engine, reply via
+// Whinta's POST /api/send. Whinta also posts Message.Sent/Status events — those
+// are ignored by extractIncoming so the bot never talks to itself.
+let _whintaLastShape = null;
+const _shapeOf = (o, d = 0) => {
+  if (o === null || typeof o !== "object" || d > 5) return typeof o;
+  if (Array.isArray(o)) return o.length ? [_shapeOf(o[0], d + 1)] : [];
+  const out = {};
+  for (const k of Object.keys(o).slice(0, 50)) out[k] = _shapeOf(o[k], d + 1);
+  return out;
+};
+// temporary diagnostic: reveals only the KEY STRUCTURE of the last webhook (no values)
+app.get("/whinta/_shape", (req, res) => {
+  if (req.query.k !== "whinta-debug") return res.sendStatus(404);
+  res.json(_whintaLastShape || { none: true });
+});
+app.post("/whinta/webhook/:id", wrap(async (req, res) => {
+  _whintaLastShape = { event: (req.body && (req.body.event || req.body.type)) || null, shape: _shapeOf(req.body) };
+  const f = await store.get(req.params.id);
+  if (!f || !f.active || f.provider !== "whinta" || !f.whinta) return res.sendStatus(200);
+  const incoming = whintaApi.extractIncoming(req.body);
+  if (!incoming || !incoming.text) return res.sendStatus(200);
+  const replies = await runBot(f, "whinta", incoming.from, incoming.text);
+  for (const msg of replies) {
+    try {
+      await whintaApi.sendText(f.whinta, incoming.from, msg);
+    } catch (e) {
+      console.error("Whinta send failed:", e.message);
     }
   }
   res.sendStatus(200);

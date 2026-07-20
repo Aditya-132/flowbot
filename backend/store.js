@@ -37,6 +37,7 @@ async function init() {
       meta       JSONB,
       green      JSONB,
       whapi      JSONB,
+      whinta     JSONB,
       provider   TEXT NOT NULL DEFAULT 'twilio',
       active     BOOLEAN NOT NULL DEFAULT false,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -46,6 +47,7 @@ async function init() {
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS meta JSONB;`);
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS green JSONB;`);
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS whapi JSONB;`);
+  await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS whinta JSONB;`);
   await pool.query(`ALTER TABLE flows ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'twilio';`);
 
   // auth: user accounts + bearer-token sessions; flows are owned per user
@@ -163,6 +165,7 @@ const rowToFlow = (r) =>
     meta: r.meta,
     green: r.green,
     whapi: r.whapi,
+    whinta: r.whinta,
     provider: r.provider,
     active: r.active,
     userId: r.user_id,
@@ -199,9 +202,9 @@ module.exports = {
 
   upsert: async (flow) => {
     const { rows } = await pool.query(
-      `INSERT INTO flows (id, name, nodes, edges, twilio, meta, green, whapi, provider, active, user_id, updated_at)
+      `INSERT INTO flows (id, name, nodes, edges, twilio, meta, green, whapi, whinta, provider, active, user_id, updated_at)
        VALUES ($1, COALESCE($2, 'Untitled bot'), COALESCE($3, '[]'::jsonb),
-               COALESCE($4, '[]'::jsonb), $5, $6, $7, $8, COALESCE($9, 'twilio'), COALESCE($10, false), $11, now())
+               COALESCE($4, '[]'::jsonb), $5, $6, $7, $8, $12, COALESCE($9, 'twilio'), COALESCE($10, false), $11, now())
        ON CONFLICT (id) DO UPDATE SET
          name       = COALESCE($2, flows.name),
          nodes      = COALESCE($3, flows.nodes),
@@ -210,6 +213,7 @@ module.exports = {
          meta       = COALESCE($6, flows.meta),
          green      = COALESCE($7, flows.green),
          whapi      = COALESCE($8, flows.whapi),
+         whinta     = COALESCE($12, flows.whinta),
          provider   = COALESCE($9, flows.provider),
          active     = COALESCE($10, flows.active),
          user_id    = COALESCE($11, flows.user_id),
@@ -227,6 +231,7 @@ module.exports = {
         flow.provider ?? null,
         typeof flow.active === "boolean" ? flow.active : null,
         flow.userId ?? null,
+        flow.whinta ? JSON.stringify(flow.whinta) : null,
       ]
     );
     return rowToFlow(rows[0]);
