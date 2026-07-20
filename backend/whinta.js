@@ -61,16 +61,29 @@ function extractIncoming(body) {
   // ignore outbound echoes, delivery/read receipts, contact/group events
   if (/sent|status|delivered|read|deliver|update|created|deleted/i.test(event)) return null;
 
-  // candidate objects that might hold the message + contact
-  const nests = [b, b.data, b.payload, b.message, b.data?.message, b.data?.data, b.entry?.[0], b.messages?.[0]].filter(Boolean);
+  // Whinta wraps a Meta Cloud API "value" object (contacts[] + messages[]),
+  // nested as data.data.value. Handle that shape first.
+  const value =
+    b?.data?.data?.value || b?.data?.value || b?.value ||
+    b?.entry?.[0]?.changes?.[0]?.value || null;
+  if (value && Array.isArray(value.messages) && value.messages.length) {
+    const msg = value.messages.find((m) => !m.from_me) || value.messages[0];
+    const from = msg.from || msg.wa_id || value.contacts?.[0]?.wa_id || digPhone(msg);
+    const text =
+      msg.text?.body ??
+      (typeof msg.text === "string" ? msg.text : "") ??
+      digText(msg);
+    if (from) return { from: String(from).replace(/^whatsapp:/i, ""), text: String(text || "") };
+  }
 
+  // generic fallback for other/simpler shapes
+  const nests = [b, b.data, b.payload, b.message, b.data?.message, b.data?.data, b.entry?.[0], b.messages?.[0]].filter(Boolean);
   let text = "";
   let from = "";
   for (const n of nests) {
     if (!text) text = digText(n);
     if (!from) from = digPhone(n);
   }
-  // also check a nested contact object anywhere obvious
   if (!from) from = digPhone(b.data?.contact) || digPhone(b.contact);
 
   if (!from) return null;
