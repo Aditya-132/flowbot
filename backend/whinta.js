@@ -67,7 +67,10 @@ function extractIncoming(body) {
     b?.data?.data?.value || b?.data?.value || b?.value ||
     b?.entry?.[0]?.changes?.[0]?.value || null;
   if (value && Array.isArray(value.messages) && value.messages.length) {
-    const msg = value.messages.find((m) => !m.from_me) || value.messages[0];
+    // only handle a genuine inbound — never fall back to our own outbound echo,
+    // or the bot would reply to itself in a loop
+    const msg = value.messages.find((m) => !m.from_me);
+    if (!msg) return null;
     const from = msg.from || msg.wa_id || value.contacts?.[0]?.wa_id || digPhone(msg);
     // a tapped reply button comes back as interactive.button_reply / button.text
     const text =

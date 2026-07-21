@@ -52,23 +52,72 @@ async function runBot(flow, channel, from, text) {
   if (live) {
     store.logEvent(flow.id, channel, key, replies.length).catch(() => {});
     if (trace.length) store.logNodeEvents(flow.id, key, trace).catch(() => {});
-    store.logChatMessages(flow.id, key, channel, [["in", text], ...replies.filter((m) => !DELAY_RE.test(m)).map((r) => ["out", r])]).catch(() => {});
+    store.logChatMessages(flow.id, key, channel, [["in", text], ...stripControl(replies).map((r) => ["out", r])]).catch(() => {});
   }
   return replies;
 }
 
-// Delay blocks emit a "DELAY:<seconds>" control marker in the reply stream.
-// deliverReplies() pauses on it before sending the next message; every other
-// surface (simulator, twilio, widget, logs) strips it — a marker must never
-// reach a customer.
-const DELAY_RE = /^DELAY:(\d+)$/;
-const stripControl = (replies) => replies.filter((m) => !DELAY_RE.test(m));
-async function deliverReplies(sendFn, replies) {
-  for (const m of replies) {
-    const d = DELAY_RE.exec(m);
-    if (d) { await new Promise((r) => setTimeout(r, Math.min(30, Number(d[1])) * 1000)); continue; }
-    try { await sendFn(m); } catch (e) { console.error("send failed:", e.message); }
+// Delay and Media blocks emit control markers in the reply stream, each prefixed
+// with a NUL so no human message can ever collide. deliverReplies() acts on them
+// (pause, or send native media); every other surface renders them as plain text so
+// a raw marker never reaches a customer.
+const isControl = (m) => typeof m === "string" && m.charCodeAt(0) === 0;
+
+function mediaFallbackText(spec) {
+  const icon = { image: "🖼️", video: "🎬", document: "📄", audio: "🔊" }[spec.mediaType] || "📎";
+  return [`${icon} ${spec.caption || ""}`.trim(), spec.url].filter(Boolean).join("\n");
+}
+
+// Parse a control marker into a { kind, ... } object; null for a plain message.
+function parseControl(m) {
+  if (!isControl(m)) return null;
+  const rest = m.slice(1);
+  const d = /^DELAY:(\d+)$/.exec(rest);
+  if (d) return { kind: "delay", seconds: Math.min(30, Number(d[1])) };
+  if (rest.startsWith("MEDIA:")) {
+    try { return { kind: "media", spec: JSON.parse(rest.slice(6)) }; }
+    catch { return { kind: "media", spec: null }; }
   }
+  return { kind: "unknown" };
+}
+
+// Render replies for a surface that can't act on markers (simulator, twilio, widget,
+// chat log): drop pauses, turn media into a caption + link, pass plain text through.
+const stripControl = (replies) => {
+  const out = [];
+  for (const m of replies) {
+    const ctl = parseControl(m);
+    if (!ctl) { out.push(m); continue; }
+    if (ctl.kind === "media" && ctl.spec) out.push(mediaFallbackText(ctl.spec));
+  }
+  return out;
+};
+
+// Deliver replies over a live channel: pause on Delay, send native media when the
+// channel supports it (sendMediaFn), otherwise fall back to a caption + link.
+async function deliverReplies(sendFn, replies, sendMediaFn) {
+  for (const m of replies) {
+    const ctl = parseControl(m);
+    if (!ctl) { try { await sendFn(m); } catch (e) { console.error("send failed:", e.message); } continue; }
+    if (ctl.kind === "delay") { await new Promise((r) => setTimeout(r, ctl.seconds * 1000)); continue; }
+    if (ctl.kind === "media") {
+      if (ctl.spec && sendMediaFn) {
+        try { await sendMediaFn(ctl.spec); continue; }
+        catch (e) { console.error("media send failed, falling back to link:", e.message); }
+      }
+      if (ctl.spec) { try { await sendFn(mediaFallbackText(ctl.spec)); } catch (e) { console.error("send failed:", e.message); } }
+    }
+  }
+}
+
+// Ack the provider webhook immediately, then run the bot + deliver replies in the
+// background. A Delay/HTTP/SMTP block can take many seconds; blocking the webhook
+// response that long makes WhatsApp providers time out and RETRY, double-processing
+// the message. Fire-and-forget keeps each inbound handled exactly once.
+function handleInbound(f, channel, incoming, sendFn, sendMediaFn) {
+  runBot(f, channel, incoming.from, incoming.text)
+    .then((replies) => deliverReplies(sendFn, replies, sendMediaFn))
+    .catch((e) => console.error(`${channel} inbound failed:`, e.message));
 }
 
 setInterval(() => {
@@ -397,9 +446,10 @@ app.post("/meta/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "meta" || !f.meta) return res.sendStatus(200); // always 200 so Meta doesn't retry forever
   const incoming = metaApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200); // delivery/read status events — nothing to do
-  const replies = await runBot(f, "meta", incoming.from, incoming.text);
-  await deliverReplies((msg) => metaApi.sendText(f.meta, incoming.from, msg), replies);
-  res.sendStatus(200);
+  res.sendStatus(200); // ack fast so the provider doesn't retry while we process
+  handleInbound(f, "meta", incoming,
+    (msg) => metaApi.sendText(f.meta, incoming.from, msg),
+    (spec) => metaApi.sendMedia(f.meta, incoming.from, spec));
 }));
 
 /* ------------------- Green API webhook ------------------- */
@@ -409,9 +459,9 @@ app.post("/green/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "green" || !f.green) return res.sendStatus(200);
   const incoming = greenApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
-  const replies = await runBot(f, "green", incoming.from, incoming.text);
-  await deliverReplies((msg) => greenApi.sendText(f.green, incoming.from, msg), replies);
-  res.sendStatus(200);
+  res.sendStatus(200); // ack fast so the provider doesn't retry while we process
+  handleInbound(f, "green", incoming,
+    (msg) => greenApi.sendText(f.green, incoming.from, msg));
 }));
 
 /* ------------------- Whapi.cloud webhook ------------------- */
@@ -421,9 +471,9 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "whapi" || !f.whapi) return res.sendStatus(200);
   const incoming = whapi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
-  const replies = await runBot(f, "whapi", incoming.from, incoming.text);
-  await deliverReplies((msg) => whapi.sendText(f.whapi, incoming.from, msg), replies);
-  res.sendStatus(200);
+  res.sendStatus(200); // ack fast so the provider doesn't retry while we process
+  handleInbound(f, "whapi", incoming,
+    (msg) => whapi.sendText(f.whapi, incoming.from, msg));
 }));
 
 /* ------------------- Whinta (app.whinta.com) webhook ------------------- */
@@ -441,9 +491,9 @@ app.post("/whinta/webhook/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "whinta" || !f.whinta) return res.sendStatus(200);
   const incoming = whintaApi.extractIncoming(req.body);
   if (!incoming || !incoming.text) return res.sendStatus(200);
-  const replies = await runBot(f, "whinta", incoming.from, incoming.text);
-  await deliverReplies((msg) => whintaApi.sendText(f.whinta, incoming.from, msg), replies);
-  res.sendStatus(200);
+  res.sendStatus(200); // ack fast so the provider doesn't retry while we process
+  handleInbound(f, "whinta", incoming,
+    (msg) => whintaApi.sendText(f.whinta, incoming.from, msg));
 }));
 
 /* ------------------- Public bot surfaces: widget embed, chat page, share page ------------------- */
