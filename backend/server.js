@@ -430,6 +430,12 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
 }));
 
 /* ------------------- Whinta (app.whinta.com) webhook ------------------- */
+// Demo helper: clear a bot's chat session so a fresh chat starts at Welcome.
+app.get("/whinta/_reset", wrap(async (req, res) => {
+  if (req.query.k !== "whinta-debug") return res.sendStatus(404);
+  if (req.query.key) await store.deleteChatSession(String(req.query.key));
+  res.json({ reset: req.query.key || null });
+}));
 // Incoming messages: parse Whinta's payload, run the same engine, reply via
 // Whinta's POST /api/send. Whinta also posts Message.Sent/Status events — those
 // are ignored by extractIncoming so the bot never talks to itself.
