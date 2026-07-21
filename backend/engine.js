@@ -70,6 +70,41 @@ async function httpRequest(c, vars) {
   }
 }
 
+// Send an email directly over SMTP (e.g. Gmail + an App Password). The password
+// lives only on the server with the bot and is never echoed to customers.
+async function sendEmailSmtp(c, vars) {
+  let nodemailer;
+  try { nodemailer = require("nodemailer"); }
+  catch { return { ok: false, error: "email module not installed" }; }
+  const host = interp(c.host || "", vars).trim();
+  const port = parseInt(c.port, 10) || 465;
+  const user = interp(c.username || "", vars).trim();
+  const pass = String(c.appPassword || "");
+  const to = interp(c.to || "", vars).trim();
+  if (!host || !user || !pass || !to)
+    return { ok: false, error: "missing SMTP host / username / app password / recipient" };
+  try {
+    const transport = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465, // 465 = implicit TLS, 587 = STARTTLS
+      auth: { user, pass },
+      connectionTimeout: 10000, // don't let a bad host hang the flow
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
+    await transport.sendMail({
+      from: interp(c.from || "", vars).trim() || user,
+      to, // nodemailer accepts a comma-separated list
+      subject: interp(c.subject || "", vars),
+      text: interp(c.body || "", vars),
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message ? e.message : "send failed").slice(0, 200) };
+  }
+}
+
 /* ---------- AI Reply block (BYOK — bring your own key) ----------
    Optional and off by default: the deterministic flow is untouched unless the
    owner drops an AI Reply block AND pastes their own provider API key. When a
@@ -513,15 +548,22 @@ async function processMessage(flow, text, session, trace) {
         }
 
         case "send_email": {
-          // POST {to, subject, body} to any email endpoint (e.g. an Apps Script
-          // MailApp webhook or an email API). Branches on success/error like http_request.
-          const cfg = {
-            method: "POST",
-            url: c.url,
-            headers: [{ key: "Content-Type", value: "application/json" }],
-            body: JSON.stringify({ to: c.to || "", subject: c.subject || "", body: c.body || "" }),
-          };
-          const r = await httpRequest(cfg, session.vars);
+          // Two modes:
+          //  • smtp     → send directly via SMTP with the owner's app password
+          //  • endpoint → POST {to, subject, body} to any email endpoint (Apps Script / API)
+          // Branches on success/error like http_request.
+          let r;
+          if (c.mode === "smtp") {
+            r = await sendEmailSmtp(c, session.vars);
+          } else {
+            const cfg = {
+              method: "POST",
+              url: c.url,
+              headers: [{ key: "Content-Type", value: "application/json" }],
+              body: JSON.stringify({ to: c.to || "", subject: c.subject || "", body: c.body || "" }),
+            };
+            r = await httpRequest(cfg, session.vars);
+          }
           if (r.ok) {
             if (c.successMessage) out.push(interp(c.successMessage, session.vars));
             cur = next(cur.id, 0);

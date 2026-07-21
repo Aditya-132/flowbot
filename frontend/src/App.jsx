@@ -208,8 +208,16 @@ const NODE_TYPES = {
   },
   send_email: {
     label: "Send Email", icon: "📧", color: "#0EA5E9",
-    desc: "Emails a notification via an email endpoint (e.g. an Apps Script). Branches on success/error.",
-    defaults: () => ({ url: "https://your-email-endpoint/exec", to: "owner@example.com", subject: "New booking from {name}", body: "{name} booked {choice} on {appointmentTime}. Phone: {phone}", successMessage: "", errorMessage: "" }),
+    desc: "Emails a notification — directly via SMTP (your app password) or by POSTing to an email endpoint. Branches on success/error.",
+    defaults: () => ({
+      mode: "smtp",
+      host: "smtp.gmail.com", port: 465, username: "", appPassword: "", from: "",
+      url: "https://your-email-endpoint/exec",
+      to: "owner@example.com",
+      subject: "New booking from {name}",
+      body: "{name} booked {choice} on {appointmentTime}. Phone: {phone}",
+      successMessage: "", errorMessage: "",
+    }),
     outputs: () => 2,
   },
   http_request: {
@@ -1834,7 +1842,71 @@ function Builder({ user, onAuthed, onLogout }) {
                   </div>
                 </>)}
 
-                {!["welcome", "goodbye", "collect", "faq", "custom", "http_request", "ai_reply"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
+                {selNode.type === "send_email" && (<>
+                  <Field label="How to send">
+                    <select style={S.input} value={selNode.config.mode || "smtp"}
+                      onChange={(e) => updateConfig(selNode.id, { mode: e.target.value })}>
+                      <option value="smtp">SMTP — send directly (your app password)</option>
+                      <option value="endpoint">Endpoint — POST to a URL (Apps Script / API)</option>
+                    </select>
+                  </Field>
+                  {(selNode.config.mode || "smtp") === "smtp" ? (<>
+                    <Field label="SMTP host">
+                      <input style={S.input} placeholder="smtp.gmail.com" value={selNode.config.host || ""}
+                        onChange={(e) => updateConfig(selNode.id, { host: e.target.value.trim() })} />
+                    </Field>
+                    <Field label="Port (465 = SSL, 587 = TLS)">
+                      <input style={S.input} type="number" value={selNode.config.port ?? 465}
+                        onChange={(e) => updateConfig(selNode.id, { port: parseInt(e.target.value, 10) || 465 })} />
+                    </Field>
+                    <Field label="Username (your email)">
+                      <input style={S.input} placeholder="you@gmail.com" value={selNode.config.username || ""}
+                        onChange={(e) => updateConfig(selNode.id, { username: e.target.value.trim() })} />
+                    </Field>
+                    <Field label="App password">
+                      <input style={S.input} type="password" placeholder="16-char app password (not your login password)"
+                        value={selNode.config.appPassword || ""}
+                        onChange={(e) => updateConfig(selNode.id, { appPassword: e.target.value })} />
+                    </Field>
+                    <Field label="From (optional — defaults to username)">
+                      <input style={S.input} placeholder="Glow Salon <you@gmail.com>" value={selNode.config.from || ""}
+                        onChange={(e) => updateConfig(selNode.id, { from: e.target.value })} />
+                    </Field>
+                    <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
+                      Gmail: turn on 2-Step Verification, then create an <b>App Password</b> (Google Account → Security → App passwords) and paste the 16-char code here. Stored with your bot on the server — never shown to customers.
+                    </div>
+                  </>) : (<>
+                    <Field label="Email endpoint URL (POST)">
+                      <input style={S.input} placeholder="https://script.google.com/…/exec" value={selNode.config.url || ""}
+                        onChange={(e) => updateConfig(selNode.id, { url: e.target.value.trim() })} />
+                    </Field>
+                    <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
+                      Posts <code>{`{to, subject, body}`}</code> as JSON. Use an Apps Script with <code>MailApp.sendEmail</code> (no password needed) or any email API.
+                    </div>
+                  </>)}
+                  <Field label="To (recipient email)">
+                    <input style={S.input} placeholder="owner@example.com" value={selNode.config.to || ""}
+                      onChange={(e) => updateConfig(selNode.id, { to: e.target.value.trim() })} />
+                  </Field>
+                  <Field label="Subject">
+                    <input style={S.input} value={selNode.config.subject || ""}
+                      onChange={(e) => updateConfig(selNode.id, { subject: e.target.value })} />
+                  </Field>
+                  <Field label="Body (use {name}, {choice}, {phone}…)">
+                    <textarea style={S.textarea} rows={4} value={selNode.config.body || ""}
+                      onChange={(e) => updateConfig(selNode.id, { body: e.target.value })} />
+                  </Field>
+                  <Field label="Success message to customer (optional)">
+                    <input style={S.input} value={selNode.config.successMessage || ""}
+                      onChange={(e) => updateConfig(selNode.id, { successMessage: e.target.value })} />
+                  </Field>
+                  <Field label="Error message to customer (optional)">
+                    <input style={S.input} value={selNode.config.errorMessage || ""}
+                      onChange={(e) => updateConfig(selNode.id, { errorMessage: e.target.value })} />
+                  </Field>
+                </>)}
+
+                {!["welcome", "goodbye", "collect", "faq", "custom", "http_request", "ai_reply", "send_email"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
                   <GenericConfig node={selNode} updateConfig={updateConfig} />
                 )}
 
