@@ -69,11 +69,14 @@ function extractIncoming(body) {
   if (value && Array.isArray(value.messages) && value.messages.length) {
     const msg = value.messages.find((m) => !m.from_me) || value.messages[0];
     const from = msg.from || msg.wa_id || value.contacts?.[0]?.wa_id || digPhone(msg);
+    // a tapped reply button comes back as interactive.button_reply / button.text
     const text =
-      msg.text?.body ??
-      (typeof msg.text === "string" ? msg.text : "") ??
-      digText(msg);
-    if (from) return { from: String(from).replace(/^whatsapp:/i, ""), text: String(text || "") };
+      msg.text?.body ||
+      msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title ||
+      msg.button?.text ||
+      (typeof msg.text === "string" ? msg.text : "") ||
+      digText(msg) || "";
+    if (from) return { from: String(from).replace(/^whatsapp:/i, ""), text: String(text) };
   }
 
   // generic fallback for other/simpler shapes
@@ -90,11 +93,32 @@ function extractIncoming(body) {
   return { from: String(from).replace(/^whatsapp:/i, ""), text: String(text || "") };
 }
 
-/** Send a plain text WhatsApp message via Whinta. */
+// FlowBot renders a menu as "<prompt>\n\n1. A\n2. B\n\nReply with a number."
+// WhatsApp reply buttons allow at most 3 short (<=20 char) options — when a menu
+// fits, send it as tappable buttons instead of a numbered list. The tapped
+// button's title comes back as the reply, which the menu matches by option text.
+function parseMenuButtons(text) {
+  const m = /^([\s\S]*?)\n+((?:\s*\d+\.\s.+\n?)+)\s*Reply with a number\.?\s*$/i.exec(text || "");
+  if (!m) return null;
+  const prompt = m[1].trim();
+  const options = m[2]
+    .split(/\n/)
+    .map((l) => l.replace(/^\s*\d+\.\s*/, "").trim())
+    .filter(Boolean);
+  if (options.length < 1 || options.length > 3) return null;
+  if (options.some((o) => o.length > 20)) return null; // WhatsApp button title cap
+  return { prompt, buttons: options.map((o, i) => ({ id: `opt_${i + 1}`, title: o })) };
+}
+
+/** Send a WhatsApp message via Whinta — as reply buttons if it's a small menu. */
 async function sendText(creds, to, text) {
   const url = `${cleanBase(creds.apiUrl)}/send`;
   // Whinta expects an E.164 phone; wa_id comes through as bare digits.
   const phone = /^\+/.test(String(to)) ? String(to) : "+" + String(to).replace(/[^\d]/g, "");
+  const menu = parseMenuButtons(text);
+  const payload = menu
+    ? { phone, message: menu.prompt, buttons: menu.buttons }
+    : { phone, message: text };
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -102,7 +126,7 @@ async function sendText(creds, to, text) {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({ phone, message: text }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -111,4 +135,4 @@ async function sendText(creds, to, text) {
   return res.json().catch(() => ({}));
 }
 
-module.exports = { extractIncoming, sendText, WHINTA_API_BASE, digText, digPhone };
+module.exports = { extractIncoming, sendText, WHINTA_API_BASE, digText, digPhone, parseMenuButtons };
