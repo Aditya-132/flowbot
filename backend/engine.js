@@ -6,7 +6,7 @@
 // Unresolved {vars} stay visible as {var} — clearer than silently printing the key.
 const interp = (msg, vars) => String(msg || "").replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
 
-const menuTypes = new Set(["menu", "quick_reply", "language", "lead_qualify"]);
+const menuTypes = new Set(["menu", "quick_reply", "language", "lead_qualify", "interactive_list"]);
 const collectConfig = {
   collect: { field: "field", question: "question", ack: "Got it." },
   collect_number: { field: "field", question: "Please share a number:", ack: "Got it." },
@@ -386,6 +386,14 @@ async function processMessage(flow, text, session, trace) {
           cur = next(cur.id, 0);
           break;
 
+        case "media": {
+          // image / video / document / audio — shared as a media URL (WhatsApp previews it)
+          const icon = { image: "🖼️", video: "🎬", document: "📄", audio: "🔊" }[c.mediaType] || "📎";
+          out.push([`${icon} ${interp(c.caption || "", session.vars)}`.trim(), interp(c.url, session.vars)].filter(Boolean).join("\n"));
+          cur = next(cur.id, 0);
+          break;
+        }
+
         case "coupon":
           out.push(`${interp(c.message || "Use this coupon:", session.vars)}\nCode: ${interp(c.code, session.vars)}`);
           cur = next(cur.id, 0);
@@ -483,6 +491,12 @@ async function processMessage(flow, text, session, trace) {
           cur = next(cur.id, 0);
           break;
 
+        case "delay":
+          // control marker — deliverReplies() pauses here; other surfaces strip it
+          out.push(`DELAY:${Math.max(1, Math.min(30, parseInt(c.seconds, 10) || 3))}`);
+          cur = next(cur.id, 0);
+          break;
+
         case "http_request": {
           const r = await httpRequest(c, session.vars);
           const field = c.saveAs || "apiResult";
@@ -493,6 +507,27 @@ async function processMessage(flow, text, session, trace) {
           } else {
             session.vars[field + "_error"] = r.error;
             out.push(interp(c.errorMessage ?? "Sorry, I couldn't reach the service right now. Please try again later.", session.vars));
+            cur = next(cur.id, 1);
+          }
+          break;
+        }
+
+        case "send_email": {
+          // POST {to, subject, body} to any email endpoint (e.g. an Apps Script
+          // MailApp webhook or an email API). Branches on success/error like http_request.
+          const cfg = {
+            method: "POST",
+            url: c.url,
+            headers: [{ key: "Content-Type", value: "application/json" }],
+            body: JSON.stringify({ to: c.to || "", subject: c.subject || "", body: c.body || "" }),
+          };
+          const r = await httpRequest(cfg, session.vars);
+          if (r.ok) {
+            if (c.successMessage) out.push(interp(c.successMessage, session.vars));
+            cur = next(cur.id, 0);
+          } else {
+            session.vars.email_error = r.error;
+            if (c.errorMessage) out.push(interp(c.errorMessage, session.vars));
             cur = next(cur.id, 1);
           }
           break;

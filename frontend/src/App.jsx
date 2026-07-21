@@ -190,6 +190,28 @@ const NODE_TYPES = {
     desc: "Creates an internal note in session variables.",
     defaults: () => ({ field: "note", note: "Customer asked about pricing.", message: "Note saved." }),
   },
+  delay: {
+    label: "Delay / Wait", icon: "⏳", color: "#94A3B8",
+    desc: "Pauses a few seconds before sending the next message — natural typing pauses.",
+    defaults: () => ({ seconds: 3 }),
+  },
+  interactive_list: {
+    label: "Interactive List", icon: "📋", color: "#F59E0B",
+    desc: "A tappable list menu — up to 10 options (more than 3 buttons allow). Each option branches.",
+    defaults: () => ({ prompt: "Choose a service 💇", options: ["Haircut", "Facial", "Manicure", "Hair Spa", "Bridal Makeup"] }),
+    outputs: (c) => (c.options || []).length,
+  },
+  media: {
+    label: "Media (image/video/doc)", icon: "🎬", color: "#8B5CF6",
+    desc: "Sends an image, video, document or audio by URL, with a caption.",
+    defaults: () => ({ mediaType: "image", url: "https://example.com/file.jpg", caption: "Here you go:" }),
+  },
+  send_email: {
+    label: "Send Email", icon: "📧", color: "#0EA5E9",
+    desc: "Emails a notification via an email endpoint (e.g. an Apps Script). Branches on success/error.",
+    defaults: () => ({ url: "https://your-email-endpoint/exec", to: "owner@example.com", subject: "New booking from {name}", body: "{name} booked {choice} on {appointmentTime}. Phone: {phone}", successMessage: "", errorMessage: "" }),
+    outputs: () => 2,
+  },
   http_request: {
     label: "HTTP Request / API", icon: "🌐", color: "#6366F1",
     desc: "Calls any external API (GET/POST/PUT/PATCH/DELETE) mid-flow and saves the response into a variable. Branches on success/error.",
@@ -260,12 +282,13 @@ const NODE_TYPES = {
   },
 };
 
-const menuLikeTypes = new Set(["menu", "quick_reply", "language", "lead_qualify"]);
+const menuLikeTypes = new Set(["menu", "quick_reply", "language", "lead_qualify", "interactive_list"]);
 const branchLabels = {
   condition: ["true", "false"],
   business_hours: ["open", "closed"],
   product_search: ["found", "not found"],
   http_request: ["success", "error"],
+  send_email: ["success", "error"],
   csat: ["1", "2", "3", "4", "5"],
 };
 

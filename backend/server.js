@@ -52,10 +52,25 @@ async function runBot(flow, channel, from, text) {
   if (live) {
     store.logEvent(flow.id, channel, key, replies.length).catch(() => {});
     if (trace.length) store.logNodeEvents(flow.id, key, trace).catch(() => {});
-    store.logChatMessages(flow.id, key, channel, [["in", text], ...replies.map((r) => ["out", r])]).catch(() => {});
+    store.logChatMessages(flow.id, key, channel, [["in", text], ...replies.filter((m) => !DELAY_RE.test(m)).map((r) => ["out", r])]).catch(() => {});
   }
   return replies;
 }
+
+// Delay blocks emit a "DELAY:<seconds>" control marker in the reply stream.
+// deliverReplies() pauses on it before sending the next message; every other
+// surface (simulator, twilio, widget, logs) strips it — a marker must never
+// reach a customer.
+const DELAY_RE = /^DELAY:(\d+)$/;
+const stripControl = (replies) => replies.filter((m) => !DELAY_RE.test(m));
+async function deliverReplies(sendFn, replies) {
+  for (const m of replies) {
+    const d = DELAY_RE.exec(m);
+    if (d) { await new Promise((r) => setTimeout(r, Math.min(30, Number(d[1])) * 1000)); continue; }
+    try { await sendFn(m); } catch (e) { console.error("send failed:", e.message); }
+  }
+}
+
 setInterval(() => {
   store.cleanupChatSessions(12).catch(() => {});
   store.cleanupChatMessages(30).catch(() => {});
@@ -328,7 +343,7 @@ app.post("/api/flows/:id/simulate", wrap(async (req, res) => {
   if (req.body.reset) await store.deleteChatSession(`${f.id}|${from}`);
   if (req.body.message === undefined) return res.json({ replies: [] });
   const replies = await runBot(f, "simulator", from, req.body.message);
-  res.json({ replies });
+  res.json({ replies: stripControl(replies) });
 }));
 
 /* ------------------- Code export ------------------- */
@@ -360,7 +375,7 @@ app.post("/whatsapp/:id", wrap(async (req, res) => {
   if (!f || !f.active || f.provider !== "twilio") return res.type("text/xml").send(twiml(["This bot is not active."]));
   const from = req.body.From || "unknown";
   const replies = await runBot(f, "twilio", from, req.body.Body || "");
-  res.type("text/xml").send(twiml(replies));
+  res.type("text/xml").send(twiml(stripControl(replies)));
 }));
 
 /* ------------------- Meta Cloud API webhook ------------------- */
@@ -383,13 +398,7 @@ app.post("/meta/webhook/:id", wrap(async (req, res) => {
   const incoming = metaApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200); // delivery/read status events — nothing to do
   const replies = await runBot(f, "meta", incoming.from, incoming.text);
-  for (const msg of replies) {
-    try {
-      await metaApi.sendText(f.meta, incoming.from, msg);
-    } catch (e) {
-      console.error("Graph API send failed:", e.message);
-    }
-  }
+  await deliverReplies((msg) => metaApi.sendText(f.meta, incoming.from, msg), replies);
   res.sendStatus(200);
 }));
 
@@ -401,13 +410,7 @@ app.post("/green/webhook/:id", wrap(async (req, res) => {
   const incoming = greenApi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
   const replies = await runBot(f, "green", incoming.from, incoming.text);
-  for (const msg of replies) {
-    try {
-      await greenApi.sendText(f.green, incoming.from, msg);
-    } catch (e) {
-      console.error("Green API send failed:", e.message);
-    }
-  }
+  await deliverReplies((msg) => greenApi.sendText(f.green, incoming.from, msg), replies);
   res.sendStatus(200);
 }));
 
@@ -419,13 +422,7 @@ app.post("/whapi/webhook/:id", wrap(async (req, res) => {
   const incoming = whapi.extractIncoming(req.body);
   if (!incoming) return res.sendStatus(200);
   const replies = await runBot(f, "whapi", incoming.from, incoming.text);
-  for (const msg of replies) {
-    try {
-      await whapi.sendText(f.whapi, incoming.from, msg);
-    } catch (e) {
-      console.error("Whapi send failed:", e.message);
-    }
-  }
+  await deliverReplies((msg) => whapi.sendText(f.whapi, incoming.from, msg), replies);
   res.sendStatus(200);
 }));
 
@@ -445,13 +442,7 @@ app.post("/whinta/webhook/:id", wrap(async (req, res) => {
   const incoming = whintaApi.extractIncoming(req.body);
   if (!incoming || !incoming.text) return res.sendStatus(200);
   const replies = await runBot(f, "whinta", incoming.from, incoming.text);
-  for (const msg of replies) {
-    try {
-      await whintaApi.sendText(f.whinta, incoming.from, msg);
-    } catch (e) {
-      console.error("Whinta send failed:", e.message);
-    }
-  }
+  await deliverReplies((msg) => whintaApi.sendText(f.whinta, incoming.from, msg), replies);
   res.sendStatus(200);
 }));
 
@@ -615,7 +606,7 @@ app.post("/api/public/:key/chat", wrap(async (req, res) => {
   const from = `web:${sid}`;
   if (req.body.reset) await store.deleteChatSession(`${f.id}|${from}`);
   const replies = await runBot(f, "widget", from, String(req.body.message ?? "").slice(0, 1000));
-  res.json({ replies });
+  res.json({ replies: stripControl(replies) });
 }));
 
 // widget poll: agent (human) replies since `after`, plus whether a human has
