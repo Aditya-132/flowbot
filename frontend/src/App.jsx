@@ -540,6 +540,37 @@ function Builder({ user, onAuthed, onLogout }) {
   const [funnel, setFunnel] = useState(null); // null = off | {totalSessions, nodes}
   useEffect(() => { setFunnel(null); }, [botId]); // counts belong to one bot
 
+  /* ---------- Session replay: walk a real conversation across the canvas ---------- */
+  const [replay, setReplay] = useState(null); // null | {key, trail:[{node,ts}], idx, playing}
+  useEffect(() => { setReplay(null); }, [botId]);
+  useEffect(() => {
+    if (!replay?.playing) return;
+    const t = setInterval(() => {
+      setReplay((r) => {
+        if (!r) return r;
+        if (r.idx >= r.trail.length - 1) return { ...r, playing: false };
+        return { ...r, idx: r.idx + 1 };
+      });
+    }, 900);
+    return () => clearInterval(t);
+  }, [replay?.playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = replay?.trail[replay.idx]?.node;
+    if (!id) return;
+    document.querySelector(`[data-node-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  }, [replay?.idx]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function startReplay(key) {
+    try {
+      const { trail } = await api.replay(botId, key);
+      const valid = (trail || []).filter((s) => nodes.some((n) => n.id === s.node));
+      if (!valid.length) { flash("No replay data for this conversation yet — it fills in as the bot runs live", true); return; }
+      setInboxOpen(false); setTab(0); setSel(null);
+      setReplay({ key, trail: valid, idx: 0, playing: true });
+    } catch (e) { flash("Could not load replay: " + e.message, true); }
+  }
+
   /* ---------- Live inbox: real conversations + human takeover ---------- */
   const [inboxOpen, setInboxOpen] = useState(false);
   const [inboxConvos, setInboxConvos] = useState(null); // null = loading
@@ -1136,7 +1167,7 @@ function Builder({ user, onAuthed, onLogout }) {
             <button onClick={toggleFunnel}
               title="Overlay: how many conversations reached each block (last 30 days)"
               style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5, ...(funnel ? { background: "#dcfce7", borderColor: "#059669", color: "#065f46" } : {}) }}>
-              📊 Funnel{funnel ? ` · ${funnel.totalSessions}` : ""}
+              📊 Heatmap{funnel ? ` · ${funnel.totalSessions} convos` : ""}
             </button>
           )}
           <div data-tour="tabs" style={{ display: "flex", gap: 6 }}>
@@ -1365,6 +1396,11 @@ function Builder({ user, onAuthed, onLogout }) {
                     <span style={{ fontWeight: 700, fontSize: 12.5, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {convoLabel(inboxSel)}
                     </span>
+                    <button style={{ ...S.miniBtn, background: "#f5f3ff", borderColor: "#ddd6fe", color: "#7c3aed", fontWeight: 700 }}
+                      onClick={() => startReplay(inboxSel)}
+                      title="Watch this conversation walk through your flowchart, block by block">
+                      🎬 Replay on canvas
+                    </button>
                     {inboxThread && (inboxThread.agentMode ? (<>
                       <span style={{ fontSize: 10.5, background: "#fef3c7", color: "#92400e", borderRadius: 999, padding: "2px 9px", fontWeight: 700 }}>🧑 you're replying — bot paused</span>
                       <button style={S.miniBtn} onClick={() => setTakeover(false)} title="The bot resumes from its Welcome block">🤖 Hand back to bot</button>
@@ -1618,12 +1654,31 @@ function Builder({ user, onAuthed, onLogout }) {
               const t = typeInfo(n);
               const selected = sel === n.id;
               const isConnectTarget = connecting && connecting.from !== n.id && n.type !== "welcome";
+              // heatmap: tint each block by how much real traffic reaches it
+              const heat = funnel && !replay ? (() => {
+                const sess = funnel.nodes[n.id]?.sessions || 0;
+                const pct = funnel.totalSessions ? sess / funnel.totalSessions : 0;
+                return { sess, pct, color: sess ? `hsl(${Math.round(140 * pct)}, 72%, 40%)` : null };
+              })() : null;
+              // replay: current block glows, visited stay tinted, the rest dim out
+              const rp = replay ? {
+                current: replay.trail[replay.idx]?.node === n.id,
+                visited: replay.trail.slice(0, replay.idx + 1).some((s) => s.node === n.id),
+              } : null;
               return (
                 <div key={n.id} data-node-id={n.id}
                   style={{
                     ...S.node, left: n.x, top: n.y, height: nodeH(n),
-                    borderColor: isConnectTarget ? "#0f766e" : selected ? t.color : "#e2e8f0",
-                    boxShadow: selected ? `0 0 0 2px ${t.color}55, 0 10px 24px rgba(15,23,42,.18)` : "0 8px 20px rgba(15,23,42,.08)",
+                    borderColor: rp ? (rp.current ? "#7c3aed" : rp.visited ? "#c4b5fd" : "#e2e8f0")
+                      : isConnectTarget ? "#0f766e" : selected ? t.color : heat?.color || "#e2e8f0",
+                    borderStyle: heat && !heat.sess ? "dashed" : "solid",
+                    opacity: rp && !rp.visited && !rp.current ? 0.35 : heat && !heat.sess ? 0.7 : 1,
+                    boxShadow: rp?.current ? "0 0 0 4px #7c3aed44, 0 14px 34px rgba(124,58,237,.35)"
+                      : selected ? `0 0 0 2px ${t.color}55, 0 10px 24px rgba(15,23,42,.18)`
+                      : heat?.color ? `0 0 0 2px ${heat.color}33, 0 8px 20px rgba(15,23,42,.08)`
+                      : "0 8px 20px rgba(15,23,42,.08)",
+                    transition: "opacity .3s ease, border-color .3s ease, box-shadow .3s ease",
+                    zIndex: rp?.current ? 4 : undefined,
                     cursor: isConnectTarget ? "crosshair" : undefined,
                   }}
                   onClick={(e) => {
@@ -1672,22 +1727,33 @@ function Builder({ user, onAuthed, onLogout }) {
                       onPointerDown={(e) => startConnect(e, n, i)}
                       title={outputCount(n) > 1 ? `drag to connect · ${portLabel(n, i)}` : "drag to connect"} />
                   ))}
-                  {funnel && (() => {
+                  {funnel && !replay && (() => {
                     const st = funnel.nodes[n.id];
                     const sess = st ? st.sessions : 0;
+                    const pct = funnel.totalSessions ? Math.round((100 * sess) / funnel.totalSessions) : 0;
                     return (
-                      <div title={`${sess} conversation${sess === 1 ? "" : "s"} reached this block in the last 30 days${st ? ` · ${st.visits} total visits` : ""}`}
+                      <div title={`${sess} conversation${sess === 1 ? "" : "s"} (${pct}% of all) reached this block in the last 30 days${st ? ` · ${st.visits} total visits` : ""}`}
                         style={{
                           position: "absolute", top: -11, right: -9, minWidth: 22, textAlign: "center",
                           padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 800,
-                          color: sess ? "#052e16" : "#64748b",
-                          background: sess ? `rgba(37,211,102,${(0.3 + 0.7 * sess / funnelMax).toFixed(2)})` : "#e2e8f0",
+                          color: sess ? "#ffffff" : "#64748b",
+                          background: sess ? `hsl(${Math.round(140 * (funnel.totalSessions ? sess / funnel.totalSessions : 0))}, 72%, 40%)` : "#e2e8f0",
                           border: "1.5px solid #ffffff", boxShadow: "0 2px 6px rgba(15,23,42,.2)", zIndex: 3,
                         }}>
-                        👤{sess}
+                        👤{sess} · {pct}%
                       </div>
                     );
                   })()}
+                  {rp?.current && (
+                    <div style={{
+                      position: "absolute", top: -11, left: "50%", transform: "translateX(-50%)",
+                      padding: "2px 10px", borderRadius: 999, fontSize: 10.5, fontWeight: 800,
+                      color: "#ffffff", background: "linear-gradient(135deg,#7c3aed,#a855f7)",
+                      border: "1.5px solid #ffffff", boxShadow: "0 2px 8px rgba(124,58,237,.4)", zIndex: 5, whiteSpace: "nowrap",
+                    }}>
+                      ▶ step {replay.idx + 1}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1695,6 +1761,32 @@ function Builder({ user, onAuthed, onLogout }) {
             {isMobile && (
               <button style={S.fab} onClick={() => setShowPalette(true)}>🧱 Blocks</button>
             )}
+            {replay && (() => {
+              const curNode = nodes.find((x) => x.id === replay.trail[replay.idx]?.node);
+              const rb = { border: "none", background: "rgba(255,255,255,.16)", color: "#ffffff", borderRadius: 999, width: 28, height: 28, cursor: "pointer", fontSize: 12, fontFamily: "inherit" };
+              return (
+                <div style={{
+                  position: "fixed", bottom: 18, left: "50%", transform: "translateX(-50%)", zIndex: 55,
+                  display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999,
+                  background: "linear-gradient(135deg,#1e1b4b,#312e81)", color: "#ffffff",
+                  boxShadow: "0 14px 44px rgba(30,27,75,.5)", maxWidth: "92vw",
+                }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap" }}>🎬 Replay</span>
+                  <button style={rb} title="previous step"
+                    onClick={() => setReplay((r) => ({ ...r, idx: Math.max(0, r.idx - 1), playing: false }))}>⏮</button>
+                  <button style={{ ...rb, background: "rgba(255,255,255,.28)" }} title={replay.playing ? "pause" : "play"}
+                    onClick={() => setReplay((r) => ({ ...r, playing: !r.playing, idx: !r.playing && r.idx >= r.trail.length - 1 ? 0 : r.idx }))}>
+                    {replay.playing ? "⏸" : "▶"}
+                  </button>
+                  <button style={rb} title="next step"
+                    onClick={() => setReplay((r) => ({ ...r, idx: Math.min(r.trail.length - 1, r.idx + 1), playing: false }))}>⏭</button>
+                  <span style={{ fontSize: 11.5, opacity: 0.9, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {replay.idx + 1}/{replay.trail.length} · {curNode ? `${typeInfo(curNode).icon} ${typeInfo(curNode).label}` : "…"}
+                  </span>
+                  <button style={rb} title="close replay" onClick={() => setReplay(null)}>✕</button>
+                </div>
+              );
+            })()}
           </div>
 
           <div data-tour="inspector" style={isMobile ? { ...S.inspector, ...S.inspectorSheet, ...(selNode ? {} : { display: "none" }) } : S.inspector}>

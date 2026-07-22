@@ -327,6 +327,15 @@ module.exports = {
     );
   },
 
+  // ordered block trail of one conversation — powers canvas session replay
+  nodeTrail: async (botId, sessionKey) => {
+    const r = await pool.query(
+      `SELECT node_id, ts FROM node_events WHERE bot_id = $1 AND session_key = $2 ORDER BY id`,
+      [botId, sessionKey]
+    );
+    return r.rows.map((row) => ({ node: row.node_id, ts: row.ts }));
+  },
+
   funnel: async (botId, days = 30) => {
     const params = [botId, String(days)];
     const perNode = await pool.query(

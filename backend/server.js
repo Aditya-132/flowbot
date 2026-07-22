@@ -527,6 +527,15 @@ app.get("/api/flows/:id/funnel", wrap(async (req, res) => {
   res.json(await store.funnel(f.id, 30));
 }));
 
+// session replay: the ordered trail of blocks one conversation walked through
+app.get("/api/flows/:id/replay", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const key = String(req.query.key || "");
+  if (!key.startsWith(`${f.id}|`)) return res.status(400).json({ error: "invalid conversation key" });
+  res.json({ trail: await store.nodeTrail(f.id, key) });
+}));
+
 /* ------------------- Live inbox: history + human takeover ------------------- */
 app.get("/api/flows/:id/inbox", wrap(async (req, res) => {
   const f = await store.get(req.params.id);
