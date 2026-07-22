@@ -48,10 +48,28 @@
     }
     </script>
 
+    <!-- Sora — the UI font the app styles ask for -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
     <style>
       html,body,#root{margin:0;height:100%;background:#eef2f9;}
       /* 16px inputs stop iOS Safari from zooming in on focus */
       @media (max-width: 860px){ input, textarea, select { font-size: 16px !important; } }
+
+      /* ---- global micro-interactions (inline styles can't do hover/focus) ---- */
+      button{ transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, background .12s ease; }
+      button:hover:not(:disabled){ filter: brightness(1.04); transform: translateY(-1px); }
+      button:active:not(:disabled){ transform: translateY(0); filter: brightness(.97); }
+      input, textarea, select{ transition: border-color .15s ease, box-shadow .15s ease; }
+      input:focus, textarea:focus, select:focus{ border-color:#25D366 !important; box-shadow:0 0 0 3px rgba(37,211,102,.18); }
+      ::selection{ background:#25D36633; }
+      *{ scrollbar-width: thin; scrollbar-color: #c3cfe0 transparent; }
+      *::-webkit-scrollbar{ width:8px; height:8px; }
+      *::-webkit-scrollbar-thumb{ background:#c3cfe0; border-radius:99px; }
+      *::-webkit-scrollbar-thumb:hover{ background:#a8b8ce; }
+      *::-webkit-scrollbar-track{ background:transparent; }
     </style>
   </head>
   <body>

@@ -12,6 +12,27 @@ import { TEMPLATES } from "./templates.js";
 
 const NODE_W = 220;
 
+// Latest models per provider — used by the AI Builder panel and the AI Reply
+// block. First entry = default when switching provider.
+const MODEL_OPTIONS = {
+  anthropic: ["claude-sonnet-5", "claude-fable-5", "claude-opus-4-8", "claude-haiku-4-5"],
+  openai: ["gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-4o-mini"],
+  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-pro-preview"],
+};
+// cheap+fast defaults for the customer-facing AI Reply block (owner pays per message)
+const CHAT_MODEL_DEFAULTS = { anthropic: "claude-haiku-4-5", openai: "gpt-5-mini", gemini: "gemini-2.5-flash" };
+
+// A model <select> that also keeps unknown/legacy model ids selectable.
+function ModelSelect({ value, provider, style, onChange }) {
+  const opts = MODEL_OPTIONS[provider] || MODEL_OPTIONS.anthropic;
+  const all = value && !opts.includes(value) ? [value, ...opts] : opts;
+  return (
+    <select style={style} value={value || opts[0]} onChange={(e) => onChange(e.target.value)}>
+      {all.map((m) => <option key={m} value={m}>{m}</option>)}
+    </select>
+  );
+}
+
 const NODE_TYPES = {
   welcome: {
     label: "Welcome Message", icon: "👋", color: "#25D366",
@@ -997,6 +1018,19 @@ function Builder({ user, onAuthed, onLogout }) {
     finally { setBusy(false); }
   }
 
+  async function deactivateBot() {
+    if (!botId) return;
+    setBusy(true);
+    try {
+      await api.deactivate(botId);
+      setActivated(false);
+      setActivation(null);
+      refreshList();
+      flash("⏸ Bot deactivated — webhook is off until you activate again");
+    } catch (e) { flash(e.message, true); }
+    finally { setBusy(false); }
+  }
+
   async function resetChat(idOverride) {
     const id = idOverride || botId;
     if (!id) return;
@@ -1148,15 +1182,14 @@ function Builder({ user, onAuthed, onLogout }) {
               <select style={{ ...S.input, flex: 1 }} value={aiCfg.provider}
                 onChange={(e) => {
                   const provider = e.target.value;
-                  const models = { anthropic: "claude-sonnet-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
-                  saveAiCfg({ provider, model: models[provider] });
+                  saveAiCfg({ provider, model: (MODEL_OPTIONS[provider] || [])[0] });
                 }}>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="openai">OpenAI / compatible</option>
                 <option value="gemini">Google Gemini</option>
               </select>
-              <input style={{ ...S.input, flex: 1 }} value={aiCfg.model}
-                onChange={(e) => saveAiCfg({ model: e.target.value.trim() })} placeholder="model" />
+              <ModelSelect style={{ ...S.input, flex: 1 }} provider={aiCfg.provider} value={aiCfg.model}
+                onChange={(model) => saveAiCfg({ model })} />
             </div>
             <input style={S.input} type="password" value={aiCfg.apiKey} placeholder="your API key (saved only in this browser)"
               onChange={(e) => saveAiCfg({ apiKey: e.target.value.trim() })} />
@@ -1799,8 +1832,7 @@ function Builder({ user, onAuthed, onLogout }) {
                     <select style={S.input} value={selNode.config.provider || "anthropic"}
                       onChange={(e) => {
                         const provider = e.target.value;
-                        const models = { anthropic: "claude-haiku-4-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
-                        updateConfig(selNode.id, { provider, model: models[provider] || "" });
+                        updateConfig(selNode.id, { provider, model: CHAT_MODEL_DEFAULTS[provider] || "" });
                       }}>
                       <option value="anthropic">Anthropic (Claude)</option>
                       <option value="openai">OpenAI / compatible</option>
@@ -1813,8 +1845,9 @@ function Builder({ user, onAuthed, onLogout }) {
                       onChange={(e) => updateConfig(selNode.id, { apiKey: e.target.value.trim() })} />
                   </Field>
                   <Field label="Model">
-                    <input style={S.input} value={selNode.config.model || ""}
-                      onChange={(e) => updateConfig(selNode.id, { model: e.target.value.trim() })} />
+                    <ModelSelect style={S.input} provider={selNode.config.provider || "anthropic"}
+                      value={selNode.config.model || ""}
+                      onChange={(model) => updateConfig(selNode.id, { model })} />
                   </Field>
                   {(selNode.config.provider || "anthropic") === "openai" && (
                     <Field label="Base URL (optional — Groq, OpenRouter…)">
@@ -2070,7 +2103,16 @@ function Builder({ user, onAuthed, onLogout }) {
               );
               return (
                 <div style={S.liveBox}>
-                  <div style={{ fontWeight: 800, color: "#059669", marginBottom: 6 }}>● Bot is live on this backend</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 800, color: "#059669" }}>● Bot is live on this backend</span>
+                    <span style={S.liveBadge}>LIVE</span>
+                    <button
+                      style={{ ...S.miniBtn, marginLeft: "auto", border: "1px solid #fecdd3", background: "#fff1f2", color: "#e11d48", fontWeight: 700, opacity: busy ? 0.5 : 1 }}
+                      disabled={busy} onClick={deactivateBot}
+                      title="Turn the webhook off — the bot stops replying until you activate again">
+                      ⏸ Deactivate
+                    </button>
+                  </div>
                   <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.7 }}>
                     {provider === "meta" ? (<>
                       Callback URL (paste in Meta App → WhatsApp → Configuration):
@@ -2245,15 +2287,14 @@ function StepsEditor({ steps, onChange }) {
               <select style={{ ...S.input, width: 150 }} value={s.provider || "anthropic"}
                 onChange={(e) => {
                   const provider = e.target.value;
-                  const models = { anthropic: "claude-haiku-4-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
-                  patch(i, { provider, model: models[provider] || "" });
+                  patch(i, { provider, model: CHAT_MODEL_DEFAULTS[provider] || "" });
                 }}>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="openai">OpenAI / compatible</option>
                 <option value="gemini">Google Gemini</option>
               </select>
-              <input style={{ ...S.input, flex: 1 }} value={s.model || ""} placeholder="model"
-                onChange={(e) => patch(i, { model: e.target.value.trim() })} />
+              <ModelSelect style={{ ...S.input, flex: 1 }} provider={s.provider || "anthropic"}
+                value={s.model || ""} onChange={(model) => patch(i, { model })} />
             </div>
             <input style={{ ...S.input, marginBottom: 6 }} type="password" value={s.apiKey || ""}
               placeholder="your provider API key (used server-side only)"
@@ -2502,11 +2543,11 @@ function demoEdges() {
 /* ---------- styles (light + colorful) ---------- */
 const mono = "'JetBrains Mono','SF Mono',Menlo,Consolas,monospace";
 const styles = {
-  app: { height: "100vh", display: "flex", flexDirection: "column", background: "#eef2f9", color: "#0f172a", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", overflow: "hidden" },
-  header: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "10px 16px", borderBottom: "1px solid #e2e8f0", background: "#ffffff", boxShadow: "0 1px 10px rgba(15,23,42,.06)" },
-  logo: { width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#25D366,#128C7E)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, boxShadow: "0 4px 14px #25d36655" },
-  tab: { padding: "8px 14px", borderRadius: 8, border: "1px solid #dbe3ee", background: "#ffffff", color: "#64748b", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
-  tabActive: { background: "linear-gradient(135deg,#25D366,#128C7E)", borderColor: "transparent", color: "#ffffff", boxShadow: "0 4px 12px rgba(18,140,126,.35)" },
+  app: { height: "100vh", display: "flex", flexDirection: "column", background: "linear-gradient(160deg,#eef2f9 0%,#e8f4ee 100%)", color: "#0f172a", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", overflow: "hidden" },
+  header: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "10px 16px", borderBottom: "1px solid rgba(226,232,240,.9)", background: "rgba(255,255,255,.92)", backdropFilter: "blur(10px)", boxShadow: "0 2px 20px rgba(15,23,42,.07)" },
+  logo: { width: 38, height: 38, borderRadius: 11, background: "linear-gradient(135deg,#25D366,#128C7E)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, boxShadow: "0 6px 20px #25d36666, inset 0 1px 0 rgba(255,255,255,.35)" },
+  tab: { padding: "8px 15px", borderRadius: 999, border: "1px solid #dbe3ee", background: "#ffffff", color: "#64748b", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
+  tabActive: { background: "linear-gradient(135deg,#25D366,#128C7E)", borderColor: "transparent", color: "#ffffff", boxShadow: "0 5px 16px rgba(18,140,126,.4)" },
   toast: { position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 99, padding: "8px 18px", borderRadius: 10, border: "1px solid", fontSize: 13, fontWeight: 700, boxShadow: "0 10px 30px rgba(15,23,42,.15)" },
   overlay: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
   labCard: { width: 560, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 20, boxShadow: "0 24px 60px rgba(15,23,42,.25)" },
@@ -2514,14 +2555,14 @@ const styles = {
   designWrap: { flex: 1, display: "flex", minHeight: 0 },
   palette: { width: 230, padding: 14, borderRight: "1px solid #e2e8f0", overflowY: "auto", background: "#ffffff", flexShrink: 0 },
   paneTitle: { fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1, color: "#0f766e", marginBottom: 8 },
-  paletteItem: { display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", padding: 10, marginBottom: 8, borderRadius: 10, border: "1px solid #e5eaf2", background: "#f8fafc", cursor: "pointer", color: "inherit", fontFamily: "inherit" },
+  paletteItem: { display: "flex", gap: 10, alignItems: "flex-start", width: "100%", textAlign: "left", padding: 10, marginBottom: 8, borderRadius: 11, border: "1px solid #e5eaf2", background: "linear-gradient(180deg,#ffffff,#f8fafc)", cursor: "pointer", color: "inherit", fontFamily: "inherit", boxShadow: "0 1px 3px rgba(15,23,42,.04)" },
   tipBox: { marginTop: 10, padding: 10, fontSize: 11, color: "#64748b", background: "#f0fdf4", border: "1px dashed #86d5ac", borderRadius: 10, lineHeight: 1.5 },
 
   // canvas pans with touch; nodes set touchAction:none so dragging them doesn't scroll
   canvas: { flex: 1, position: "relative", overflow: "auto", backgroundImage: "radial-gradient(#c6d3e8 1.2px, transparent 1.2px)", backgroundSize: "22px 22px", backgroundColor: "#f1f5fb", touchAction: "pan-x pan-y", WebkitOverflowScrolling: "touch" },
   svg: { position: "absolute", top: 0, left: 0, pointerEvents: "none" },
 
-  node: { position: "absolute", width: NODE_W, background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: 12, userSelect: "none", touchAction: "none" },
+  node: { position: "absolute", width: NODE_W, background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: 13, boxShadow: "0 4px 16px rgba(15,23,42,.07)", userSelect: "none", touchAction: "none" },
   nodeHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", fontSize: 12, fontWeight: 800, borderRadius: "10px 10px 0 0", cursor: "grab" },
   entryBadge: { fontSize: 9, fontWeight: 800, background: "#25D366", color: "#ffffff", padding: "1px 6px", borderRadius: 6 },
   nodeBody: { padding: "8px 10px" },
@@ -2542,7 +2583,7 @@ const styles = {
   miniBtn: { padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #dbe3ee", background: "#ffffff", color: "#64748b", cursor: "pointer", fontFamily: "inherit" },
   addBtn: { width: "100%", padding: "7px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px dashed #059669", background: "transparent", color: "#059669", cursor: "pointer", fontFamily: "inherit" },
   dangerBtn: { width: "100%", marginTop: 8, padding: "8px", fontSize: 12, fontWeight: 700, borderRadius: 8, border: "1px solid #fecdd3", background: "#fff1f2", color: "#e11d48", cursor: "pointer", fontFamily: "inherit" },
-  primaryBtn: { padding: "9px 18px", fontSize: 13, fontWeight: 800, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(18,140,126,.3)" },
+  primaryBtn: { padding: "9px 18px", fontSize: 13, fontWeight: 800, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#2ce07a 0%,#25D366 45%,#128C7E 100%)", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 6px 18px rgba(18,140,126,.38), inset 0 1px 0 rgba(255,255,255,.28)" },
   ghostBtn: { padding: "8px 14px", fontSize: 12.5, fontWeight: 700, borderRadius: 9, border: "1px solid #c8e6d5", background: "#f0fdf4", color: "#0f766e", cursor: "pointer", fontFamily: "inherit" },
 
   codeWrap: { flex: 1, display: "flex", flexDirection: "column", minHeight: 0, padding: 16, gap: 10 },
@@ -2552,8 +2593,9 @@ const styles = {
   inlineCode: { fontFamily: mono, fontSize: 11, background: "#e8eef7", padding: "1px 6px", borderRadius: 5, color: "#0f766e" },
 
   activateWrap: { flex: 1, display: "flex", gap: 18, padding: 18, overflow: "auto", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "center" },
-  credCard: { width: 360, maxWidth: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 18, boxShadow: "0 10px 30px rgba(15,23,42,.08)" },
-  liveBox: { marginTop: 14, padding: 12, borderRadius: 10, background: "#ecfdf5", border: "1px solid #34d399" },
+  credCard: { width: 360, maxWidth: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18, boxShadow: "0 14px 40px rgba(15,23,42,.09)" },
+  liveBox: { marginTop: 14, padding: 12, borderRadius: 12, background: "linear-gradient(160deg,#ecfdf5,#f0fdf9)", border: "1px solid #34d399", boxShadow: "0 6px 20px rgba(52,211,153,.15)" },
+  liveBadge: { fontSize: 9.5, fontWeight: 800, letterSpacing: 1, color: "#ffffff", background: "linear-gradient(135deg,#22c55e,#059669)", padding: "2px 8px", borderRadius: 999, boxShadow: "0 0 0 3px rgba(34,197,94,.18)", animation: "none" },
 
   phone: { width: 340, maxWidth: "100%", height: "min(560px, calc(100dvh - 180px))", minHeight: 380, display: "flex", flexDirection: "column", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 22, overflow: "hidden", boxShadow: "0 20px 50px rgba(15,23,42,.18)" },
   phoneHeader: { display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "linear-gradient(135deg,#128C7E,#25D366)", color: "#ffffff" },

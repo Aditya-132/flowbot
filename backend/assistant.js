@@ -62,7 +62,7 @@ RULES:
 BLOCK CATALOG:${CATALOG}`;
 
 const PRIVATE_HOST = /^(localhost$|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0$|\[?::1\]?$|172\.(1[6-9]|2\d|3[01])\.)/i;
-const DEFAULT_MODELS = { anthropic: "claude-sonnet-5", openai: "gpt-4o-mini", gemini: "gemini-2.5-flash" };
+const DEFAULT_MODELS = { anthropic: "claude-sonnet-5", openai: "gpt-5-mini", gemini: "gemini-2.5-flash" };
 
 async function chatLLM({ provider, apiKey, model, baseUrl }, system, messages) {
   const p = ["anthropic", "openai", "gemini"].includes(provider) ? provider : "anthropic";

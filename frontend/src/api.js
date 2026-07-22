@@ -37,6 +37,7 @@ export const api = {
   updateFlow: (id, body) => send(`/api/flows/${id}`, "PUT", body).then(j),
   deleteFlow: (id) => fetch(`/api/flows/${id}`, { method: "DELETE", headers: headers() }).then(j),
   activate: (id, creds) => send(`/api/flows/${id}/activate`, "POST", creds).then(j),
+  deactivate: (id) => send(`/api/flows/${id}/deactivate`, "POST", {}).then(j),
   publish: (id, body) => send(`/api/flows/${id}/publish`, "POST", body).then(j),
   analytics: (id) => get(`/api/flows/${id}/analytics`).then(j),
   funnel: (id) => get(`/api/flows/${id}/funnel`).then(j),
