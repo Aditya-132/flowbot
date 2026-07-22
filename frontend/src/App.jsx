@@ -1975,10 +1975,10 @@ function Builder({ user, onAuthed, onLogout }) {
         <div style={S.activateWrap}>
           <div style={S.credCard}>
             <div style={S.paneTitle}>Connect a provider</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
               {[["meta", "Meta Cloud API"], ["whinta", "Whinta"], ["green", "Green API"], ["whapi", "Whapi.cloud"], ["twilio", "Twilio"]].map(([p, label]) => (
                 <button key={p} onClick={() => setProvider(p)}
-                  style={{ ...S.tab, flex: 1, ...(provider === p ? S.tabActive : {}) }}>{label}</button>
+                  style={{ ...S.tab, flex: "1 1 auto", borderRadius: 9, padding: "7px 10px", fontSize: 11.5, whiteSpace: "nowrap", ...(provider === p ? S.tabActive : {}) }}>{label}</button>
               ))}
             </div>
 
