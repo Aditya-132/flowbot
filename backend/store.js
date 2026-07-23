@@ -391,6 +391,25 @@ module.exports = {
     }));
   },
 
+  // full message history of the N most recent conversations, oldest-first —
+  // powers Time Machine replay (draft flow vs what really happened)
+  recentThreads: async (botId, sessions = 20) => {
+    const { rows } = await pool.query(
+      `SELECT session_key, direction, body FROM chat_messages
+       WHERE bot_id = $1 AND session_key IN (
+         SELECT session_key FROM chat_messages WHERE bot_id = $1
+         GROUP BY session_key ORDER BY MAX(id) DESC LIMIT $2
+       ) ORDER BY id`,
+      [botId, sessions]
+    );
+    const map = new Map();
+    for (const r of rows) {
+      if (!map.has(r.session_key)) map.set(r.session_key, []);
+      map.get(r.session_key).push({ direction: r.direction, body: r.body });
+    }
+    return map;
+  },
+
   inboxThread: async (botId, sessionKey, limit = 200) => {
     const { rows } = await pool.query(
       `SELECT id, channel, direction, body, ts FROM chat_messages

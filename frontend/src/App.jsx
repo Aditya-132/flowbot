@@ -606,6 +606,21 @@ function Builder({ user, onAuthed, onLogout }) {
   const [funnel, setFunnel] = useState(null); // null = off | {totalSessions, nodes}
   useEffect(() => { setFunnel(null); }, [botId]); // counts belong to one bot
 
+  /* ---------- Time Machine: test the draft against real past conversations ---------- */
+  const [tmOpen, setTmOpen] = useState(false);
+  const [tmBusy, setTmBusy] = useState(false);
+  const [tmReport, setTmReport] = useState(null); // {total, same, changed:[...]}
+  async function runTimeMachine() {
+    if (!userRef.current) { needAuth(runTimeMachine); return; }
+    if (!botId) { flash("Save your bot first — the Time Machine replays its real conversations", true); return; }
+    setTmBusy(true); setTmOpen(true); setTmReport(null);
+    try {
+      const body = { nodes: nodes.map(({ id, type, config }) => ({ id, type, config })), edges };
+      setTmReport(await api.timeMachine(botId, body));
+    } catch (e) { setTmOpen(false); flash("Time Machine failed: " + e.message, true); }
+    finally { setTmBusy(false); }
+  }
+
   /* ---------- Flow Doctor: instant offline health check ---------- */
   const [doctorOpen, setDoctorOpen] = useState(false);
   const [doctorReport, setDoctorReport] = useState(null); // {score, issues}
@@ -1258,6 +1273,13 @@ function Builder({ user, onAuthed, onLogout }) {
               🩺 Flow Doctor
             </button>
           )}
+          {tab === 0 && (
+            <button onClick={runTimeMachine}
+              title="Replay your bot's real past conversations through this draft — see who'd get a different experience BEFORE you save. Dry-run: nothing is sent, no API/email fires."
+              style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5 }}>
+              🕰 Time Machine
+            </button>
+          )}
           <div data-tour="tabs" style={{ display: "flex", gap: 6 }}>
             {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
               <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
@@ -1527,6 +1549,75 @@ function Builder({ user, onAuthed, onLogout }) {
                   </div>
                 </>)}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ TIME MACHINE: draft vs real past conversations ============ */}
+      {tmOpen && (
+        <div style={S.overlay} onClick={() => setTmOpen(false)}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "min(620px, 94vw)", maxHeight: "86vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(15,23,42,.3)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 22 }}>🕰</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>Time Machine</div>
+                <div style={{ fontSize: 11.5, color: "#64748b" }}>
+                  Your current canvas, tested against the bot's real past conversations — before you save.
+                </div>
+              </div>
+              <button style={S.miniBtn} onClick={() => setTmOpen(false)}>✕ close</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+              {tmBusy ? (
+                <div style={{ padding: 40, textAlign: "center", color: "#64748b", fontSize: 13 }}>
+                  ⏳ Replaying real conversations through your draft…<br />
+                  <span style={{ fontSize: 11, color: "#94a3b8" }}>Dry-run — nothing is sent, no API or email fires.</span>
+                </div>
+              ) : !tmReport ? null : tmReport.total === 0 ? (
+                <div style={{ padding: 30, textAlign: "center", color: "#64748b", fontSize: 12.5, lineHeight: 1.7 }}>
+                  No past conversations to test against yet.<br />
+                  The Time Machine gets smarter with every real chat your bot has.
+                </div>
+              ) : (<>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, marginBottom: 12,
+                  background: tmReport.changed.length === 0 ? "#ecfdf5" : "#fffbeb",
+                  border: `1px solid ${tmReport.changed.length === 0 ? "#34d399" : "#fcd34d"}`,
+                }}>
+                  <div style={{ fontSize: 26 }}>{tmReport.changed.length === 0 ? "✅" : "⚠️"}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: tmReport.changed.length === 0 ? "#065f46" : "#92400e", lineHeight: 1.5 }}>
+                    {tmReport.same} of {tmReport.total} real conversation{tmReport.total === 1 ? "" : "s"} behave exactly the same on this draft.
+                    {tmReport.changed.length > 0 && <> {tmReport.changed.length} would change{tmReport.changed.some((c) => c.stuckMore) ? " — some customers would get stuck" : ""}.</>}
+                  </div>
+                </div>
+                {tmReport.changed.map((c, i) => (
+                  <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontWeight: 800, fontSize: 12.5 }}>💬 {convoLabel(c.key)}</span>
+                      <span style={{ fontSize: 10.5, color: "#94a3b8" }}>changes at message {c.firstDiff.turn} of {c.turns}</span>
+                      {c.stuckMore && <span style={{ fontSize: 10, background: "#fef2f2", color: "#b91c1c", borderRadius: 999, padding: "2px 8px", fontWeight: 800 }}>⚠ gets stuck</span>}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "#475569", marginBottom: 6 }}>
+                      Customer said: <b>“{c.firstDiff.customerSaid}”</b>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
+                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: "#64748b", marginBottom: 4 }}>LIVE BOT REPLIED</div>
+                        <div style={{ fontSize: 11.5, whiteSpace: "pre-wrap", color: "#334155" }}>{c.firstDiff.before}</div>
+                      </div>
+                      <div style={{ background: "#faf5ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: "#7c3aed", marginBottom: 4 }}>YOUR DRAFT WOULD REPLY</div>
+                        <div style={{ fontSize: 11.5, whiteSpace: "pre-wrap", color: "#334155" }}>{c.firstDiff.after}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>)}
+            </div>
+            <div style={{ padding: "10px 18px", borderTop: "1px solid #e2e8f0", fontSize: 10.5, color: "#94a3b8" }}>
+              Deterministic engine ⇒ identical input, identical output — any change you see is caused by your edit alone. Fully dry-run: no messages, APIs or emails fire.
             </div>
           </div>
         </div>

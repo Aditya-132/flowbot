@@ -536,6 +536,62 @@ app.get("/api/flows/:id/replay", wrap(async (req, res) => {
   res.json({ trail: await store.nodeTrail(f.id, key) });
 }));
 
+/* ------------------- Time Machine: test a draft against real past conversations -------------------
+   Replays the inbound messages of recent REAL conversations through both the saved
+   flow (baseline) and the draft on the canvas — fully dry-run (no HTTP/email/AI side
+   effects, nothing is sent to anyone) — then reports which conversations would
+   behave differently. Deterministic engine ⇒ identical input always gives identical
+   output, so any diff is caused by the draft edit alone. */
+async function replayThrough(flow, inbound) {
+  const session = { state: null, vars: {} };
+  const replies = [];
+  for (const text of inbound) {
+    const rs = await handleMessage(flow, text, session, null, true); // dryRun
+    replies.push(stripControl(rs).join("\n"));
+  }
+  return replies;
+}
+
+app.post("/api/flows/:id/timemachine", wrap(async (req, res) => {
+  const f = await store.get(req.params.id);
+  if (!f || !owns(f, req)) return res.status(404).json({ error: "not found" });
+  const err = validateFlow(req.body || {});
+  if (err) return res.status(400).json({ error: err });
+  const draft = { nodes: req.body.nodes, edges: req.body.edges };
+  const baseline = { nodes: f.nodes, edges: f.edges };
+  const threads = await store.recentThreads(f.id, 20);
+  const results = [];
+  for (const [key, msgs] of threads) {
+    const inbound = msgs.filter((m) => m.direction === "in").map((m) => m.body).slice(0, 30);
+    if (!inbound.length) continue;
+    const before = await replayThrough(baseline, inbound);
+    const after = await replayThrough(draft, inbound);
+    let diffAt = -1;
+    for (let i = 0; i < inbound.length; i++) {
+      if ((before[i] || "") !== (after[i] || "")) { diffAt = i; break; }
+    }
+    const fallbacks = (arr) => arr.join("\n").split("Sorry, I didn't catch that").length - 1;
+    results.push({
+      key,
+      turns: inbound.length,
+      same: diffAt < 0,
+      // the draft trips this customer up more often than the live flow did
+      stuckMore: fallbacks(after) > fallbacks(before),
+      firstDiff: diffAt < 0 ? null : {
+        turn: diffAt + 1,
+        customerSaid: inbound[diffAt].slice(0, 200),
+        before: (before[diffAt] || "(no reply)").slice(0, 500),
+        after: (after[diffAt] || "(no reply)").slice(0, 500),
+      },
+    });
+  }
+  res.json({
+    total: results.length,
+    same: results.filter((r) => r.same).length,
+    changed: results.filter((r) => !r.same),
+  });
+}));
+
 /* ------------------- Live inbox: history + human takeover ------------------- */
 app.get("/api/flows/:id/inbox", wrap(async (req, res) => {
   const f = await store.get(req.params.id);

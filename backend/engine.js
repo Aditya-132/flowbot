@@ -75,6 +75,11 @@ async function httpRequest(c, vars) {
   }
 }
 
+// Time Machine replay uses this stub instead of a real network call — replaying a
+// past conversation must never re-fire a real HTTP request, re-append a sheet row,
+// or re-send an email. Always "succeeds" so branching matches the common case.
+const DRY_STUB = { ok: true, value: "[dry-run: network call skipped]" };
+
 // Send an email directly over SMTP (e.g. Gmail + an App Password). The password
 // lives only on the server with the bot and is never echoed to customers.
 async function sendEmailSmtp(c, vars) {
@@ -261,7 +266,7 @@ function missingVar(node, vars) {
    Steps run in order; ask/ai/choice pause for the user's reply (ai chats
    until the customer types 0, then the remaining steps continue). */
 
-async function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn) {
+async function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn, dryRun) {
   const steps = (node.config && Array.isArray(node.config.steps) ? node.config.steps : []);
   for (let i = startIdx; i < steps.length; i++) {
     const s = steps[i] || {};
@@ -270,7 +275,7 @@ async function runCustomSteps(node, session, out, startIdx, interpFn, optionProm
     } else if (s.kind === "set") {
       session.vars[s.field || "value"] = interpFn(s.value || "", session.vars);
     } else if (s.kind === "api") {
-      const r = await httpRequest(s, session.vars);
+      const r = dryRun ? DRY_STUB : await httpRequest(s, session.vars);
       const field = s.field || "apiResult";
       if (r.ok) {
         session.vars[field] = r.value;
@@ -349,18 +354,20 @@ function isOpenNow(c) {
  * @param {string} text     incoming message body
  * @param {object} session  mutable {state, vars}
  * @param {string[]} [trace]  optional — collects the id of every block executed
+ * @param {boolean} [dryRun]  optional — Time Machine replay: skip real HTTP/email side
+ *                            effects (http_request, send_email, custom api steps)
  * @returns {Promise<string[]>}  bot replies
  */
-async function handleMessage(flow, text, session, trace) {
+async function handleMessage(flow, text, session, trace, dryRun) {
   // drop empty strings so optional messages (blank condition/hours text) never
   // reach the provider — WhatsApp APIs reject empty bodies
-  const replies = (await processMessage(flow, text, session, trace)).map((r) => String(r ?? "").trim()).filter(Boolean);
+  const replies = (await processMessage(flow, text, session, trace, dryRun)).map((r) => String(r ?? "").trim()).filter(Boolean);
   // never leave the customer on silence when a branch dead-ends
   if (!replies.length) replies.push("✅ That's all for now. Send any message to start over.");
   return replies;
 }
 
-async function processMessage(flow, text, session, trace) {
+async function processMessage(flow, text, session, trace, dryRun) {
   const out = [];
   const byId = Object.fromEntries(flow.nodes.map((n) => [n.id, n]));
   const next = (id, port) => getNext(flow, byId, id, port);
@@ -539,7 +546,7 @@ async function processMessage(flow, text, session, trace) {
           break;
 
         case "http_request": {
-          const r = await httpRequest(c, session.vars);
+          const r = dryRun ? DRY_STUB : await httpRequest(c, session.vars);
           const field = c.saveAs || "apiResult";
           if (r.ok) {
             session.vars[field] = r.value;
@@ -559,7 +566,9 @@ async function processMessage(flow, text, session, trace) {
           //  • endpoint → POST {to, subject, body} to any email endpoint (Apps Script / API)
           // Branches on success/error like http_request.
           let r;
-          if (c.mode === "smtp") {
+          if (dryRun) {
+            r = DRY_STUB;
+          } else if (c.mode === "smtp") {
             r = await sendEmailSmtp(c, session.vars);
           } else {
             const cfg = {
@@ -582,7 +591,7 @@ async function processMessage(flow, text, session, trace) {
         }
 
         case "custom": {
-          const waiting = await runCustomSteps(cur, session, out, 0, interp, optionPrompt);
+          const waiting = await runCustomSteps(cur, session, out, 0, interp, optionPrompt, dryRun);
           if (waiting) return;
           cur = next(cur.id, 0);
           break;
@@ -628,7 +637,7 @@ async function processMessage(flow, text, session, trace) {
     const s = steps[idx];
     if (!node || !s) {
       session.state = null;
-      return handleMessage(flow, text, session, trace);
+      return handleMessage(flow, text, session, trace, dryRun);
     }
     if (s.kind === "ask") {
       if (!t) {
@@ -644,7 +653,7 @@ async function processMessage(flow, text, session, trace) {
       session.state = null;
       session.vars[s.field || "value"] = result.value;
       if (s.ack) out.push(interp(s.ack, session.vars));
-      const waiting = await runCustomSteps(node, session, out, idx + 1, interp, optionPrompt);
+      const waiting = await runCustomSteps(node, session, out, idx + 1, interp, optionPrompt, dryRun);
       if (!waiting) await continueOrEnd(node, 0);
       return out;
     }
@@ -653,7 +662,7 @@ async function processMessage(flow, text, session, trace) {
       if (t === "0" || /^(exit|menu|back)$/i.test(t)) {
         delete (session.aiHist || {})[`${nodeId}:${idx}`];
         session.state = null;
-        const waiting = await runCustomSteps(node, session, out, idx + 1, interp, optionPrompt);
+        const waiting = await runCustomSteps(node, session, out, idx + 1, interp, optionPrompt, dryRun);
         if (!waiting) await continueOrEnd(node, 0);
         return out;
       }
@@ -662,7 +671,7 @@ async function processMessage(flow, text, session, trace) {
         return out;
       }
       const hist = ((session.aiHist ??= {})[`${nodeId}:${idx}`] ??= []);
-      const r = await aiReply(s, hist, t, session.vars);
+      const r = dryRun ? { ok: true, text: "[dry-run: AI reply skipped]" } : await aiReply(s, hist, t, session.vars);
       if (r.ok) {
         hist.push({ role: "user", content: t }, { role: "assistant", content: r.text });
         if (hist.length > 12) hist.splice(0, hist.length - 12);
@@ -698,7 +707,7 @@ async function processMessage(flow, text, session, trace) {
     const [, nodeId, varName] = session.state.split("|");
     const node = byId[nodeId];
     session.state = null;
-    if (!node) return handleMessage(flow, text, session, trace);
+    if (!node) return handleMessage(flow, text, session, trace, dryRun);
     if (!t) {
       out.push(askFor(varName));
       session.state = `ask|${nodeId}|${varName}`;
@@ -712,7 +721,7 @@ async function processMessage(flow, text, session, trace) {
   const cur = byId[session.state];
   if (!cur) {
     session.state = null;
-    return handleMessage(flow, text, session, trace);
+    return handleMessage(flow, text, session, trace, dryRun);
   }
 
   const c = cur.config || {};
@@ -817,7 +826,8 @@ async function processMessage(flow, text, session, trace) {
       return out;
     }
     const hist = ((session.aiHist ??= {})[cur.id] ??= []);
-    const r = await aiReply(c, hist, t, session.vars);
+    // dry-run: never hit the owner's real LLM (cost + nondeterminism) during replay
+    const r = dryRun ? { ok: true, text: "[dry-run: AI reply skipped]" } : await aiReply(c, hist, t, session.vars);
     if (r.ok) {
       hist.push({ role: "user", content: t }, { role: "assistant", content: r.text });
       if (hist.length > 12) hist.splice(0, hist.length - 12);
@@ -830,7 +840,7 @@ async function processMessage(flow, text, session, trace) {
 
   // state pointed at a non-interactive block (stale flow edit) — restart cleanly
   session.state = null;
-  return handleMessage(flow, text, session, trace);
+  return handleMessage(flow, text, session, trace, dryRun);
 }
 
 module.exports = { handleMessage, interp };
