@@ -395,6 +395,72 @@ const portLabel = (n, i) => {
   if (branchLabels[n.type]) return branchLabels[n.type][i] || "";
   return "";
 };
+
+/* ---------- Flow Doctor: instant, offline health check (pure rules, no AI, no network) ----------
+   Runs entirely on the nodes/edges already in memory — no save required, no server round-trip.
+   Catches what a first-time WhatsApp bot builder always misses: unreachable blocks, dead-end
+   branches (an option or an error path nobody wired anywhere), missing/duplicate entry points,
+   blank messages, and button text WhatsApp will silently refuse to render as a tappable button. */
+function runFlowDoctor(nodes, edges) {
+  const issues = []; // {severity: 'error'|'warn'|'info', nodeId, message}
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const welcomes = nodes.filter((n) => n.type === "welcome");
+
+  if (welcomes.length === 0) {
+    issues.push({ severity: "error", nodeId: null, message: "No Welcome block — the bot has no entry point and will never start." });
+  } else if (welcomes.length > 1) {
+    for (const w of welcomes.slice(1)) {
+      issues.push({ severity: "warn", nodeId: w.id, message: `Extra Welcome block — only the first one on the canvas is used as the entry point; this one is ignored.` });
+    }
+  }
+
+  // BFS reachability from every Welcome block, following any wired edge
+  const reachable = new Set();
+  const queue = welcomes.map((w) => w.id);
+  while (queue.length) {
+    const id = queue.shift();
+    if (reachable.has(id) || !byId[id]) continue;
+    reachable.add(id);
+    for (const e of edges) if (e.from === id) queue.push(e.to);
+  }
+
+  for (const n of nodes) {
+    // blank-message check must run before the welcome skip, or Welcome is never checked
+    if (["welcome", "goodbye", "text"].includes(n.type) && !String(n.config?.message || "").trim()) {
+      issues.push({ severity: "warn", nodeId: n.id, message: `"${typeInfo(n).label}" has no message text.` });
+    }
+    if (n.type === "welcome") continue;
+    if (!reachable.has(n.id)) {
+      issues.push({ severity: "warn", nodeId: n.id, message: `"${typeInfo(n).label}" is unreachable — no path from Welcome leads here yet.` });
+      continue; // unreachable already explains any "dead" outputs below it
+    }
+    // terminal blocks (goodbye) really have 0 outputs — outputCount() clamps 0 to 1
+    // for canvas port rendering, which would flag every goodbye as a fake dead end
+    const outFn = NODE_TYPES[n.type]?.outputs;
+    const expected = outFn && outFn(n.config || {}) === 0 ? 0 : outputCount(n);
+    const wiredPorts = new Set(edges.filter((e) => e.from === n.id).map((e) => e.fromPort));
+    for (let i = 0; i < expected; i++) {
+      if (!wiredPorts.has(i)) {
+        const label = portLabel(n, i);
+        issues.push({ severity: "error", nodeId: n.id, message: `"${typeInfo(n).label}" — ${label ? `the "${label}" branch` : `output ${i + 1}`} isn't connected to anything. A customer who lands there gets no reply.` });
+      }
+    }
+    // WhatsApp only turns a menu into tappable buttons when it has <=3 options
+    // each <=20 chars — longer text silently falls back to a numbered list.
+    if (menuLikeTypes.has(n.type) && n.type !== "interactive_list") {
+      const opts = n.config?.options || [];
+      if (opts.length && opts.length <= 3 && opts.some((o) => String(o).length > 20)) {
+        issues.push({ severity: "info", nodeId: n.id, message: `"${typeInfo(n).label}" has an option over 20 characters — WhatsApp can't show it as a tappable button, so it'll fall back to a numbered list.` });
+      }
+    }
+  }
+
+  const score = Math.max(0, 100
+    - issues.filter((i) => i.severity === "error").length * 12
+    - issues.filter((i) => i.severity === "warn").length * 6
+    - issues.filter((i) => i.severity === "info").length * 2);
+  return { score, issues };
+}
 const bez = (a, b) => {
   const dx = Math.max(40, Math.abs(b.x - a.x) * 0.5);
   return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
@@ -539,6 +605,21 @@ function Builder({ user, onAuthed, onLogout }) {
   /* ---------- Funnel overlay: conversations reaching each block ---------- */
   const [funnel, setFunnel] = useState(null); // null = off | {totalSessions, nodes}
   useEffect(() => { setFunnel(null); }, [botId]); // counts belong to one bot
+
+  /* ---------- Flow Doctor: instant offline health check ---------- */
+  const [doctorOpen, setDoctorOpen] = useState(false);
+  const [doctorReport, setDoctorReport] = useState(null); // {score, issues}
+  function runDoctor() {
+    setDoctorReport(runFlowDoctor(nodes, edges));
+    setDoctorOpen(true);
+  }
+  function gotoDoctorIssue(nodeId) {
+    if (!nodeId) return;
+    setDoctorOpen(false);
+    setTab(0); setSel(nodeId);
+    setTimeout(() => document.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }), 60);
+  }
 
   /* ---------- Session replay: walk a real conversation across the canvas ---------- */
   const [replay, setReplay] = useState(null); // null | {key, trail:[{node,ts}], idx, playing}
@@ -1170,6 +1251,13 @@ function Builder({ user, onAuthed, onLogout }) {
               📊 Heatmap{funnel ? ` · ${funnel.totalSessions} convos` : ""}
             </button>
           )}
+          {tab === 0 && (
+            <button onClick={runDoctor}
+              title="Instant health check — dead ends, unreachable blocks, blank messages. Runs offline, no save needed."
+              style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5 }}>
+              🩺 Flow Doctor
+            </button>
+          )}
           <div data-tour="tabs" style={{ display: "flex", gap: 6 }}>
             {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
               <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
@@ -1443,6 +1531,61 @@ function Builder({ user, onAuthed, onLogout }) {
           </div>
         </div>
       )}
+
+      {/* ============ FLOW DOCTOR: instant offline health check ============ */}
+      {doctorOpen && doctorReport && (() => {
+        const sevStyle = { error: { bg: "#fef2f2", bd: "#fca5a5", fg: "#b91c1c", icon: "🔴" }, warn: { bg: "#fffbeb", bd: "#fcd34d", fg: "#92400e", icon: "🟡" }, info: { bg: "#eff6ff", bd: "#93c5fd", fg: "#1d4ed8", icon: "🔵" } };
+        const scoreColor = doctorReport.score >= 90 ? "#059669" : doctorReport.score >= 70 ? "#d97706" : "#dc2626";
+        const order = { error: 0, warn: 1, info: 2 };
+        const sorted = [...doctorReport.issues].sort((a, b) => order[a.severity] - order[b.severity]);
+        return (
+          <div style={S.overlay} onClick={() => setDoctorOpen(false)}>
+            <div style={{ background: "#fff", borderRadius: 16, width: "min(560px, 94vw)", maxHeight: "86vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(15,23,42,.3)" }}
+              onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderBottom: "1px solid #e2e8f0" }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16, fontWeight: 800, color: scoreColor, border: `3px solid ${scoreColor}`, background: scoreColor + "12",
+                }}>{doctorReport.score}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>🩺 Flow Doctor</div>
+                  <div style={{ fontSize: 11.5, color: "#64748b" }}>
+                    {sorted.length === 0 ? "No issues found — this bot is ready to go live 🎉"
+                      : `${sorted.filter((i) => i.severity === "error").length} error(s) · ${sorted.filter((i) => i.severity === "warn").length} warning(s) · ${sorted.filter((i) => i.severity === "info").length} tip(s)`}
+                  </div>
+                </div>
+                <button style={S.miniBtn} onClick={() => setDoctorOpen(false)}>✕ close</button>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+                {sorted.length === 0 ? (
+                  <div style={{ padding: 30, textAlign: "center", color: "#059669", fontSize: 13, fontWeight: 700 }}>
+                    ✅ No dead ends, no unreachable blocks, nothing blank. Ship it.
+                  </div>
+                ) : sorted.map((iss, i) => {
+                  const sv = sevStyle[iss.severity];
+                  const n = iss.nodeId ? nodes.find((x) => x.id === iss.nodeId) : null;
+                  return (
+                    <div key={i} onClick={() => gotoDoctorIssue(iss.nodeId)}
+                      style={{
+                        display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", marginBottom: 8,
+                        borderRadius: 10, background: sv.bg, border: `1px solid ${sv.bd}`, cursor: n ? "pointer" : "default",
+                      }}>
+                      <span style={{ fontSize: 13 }}>{sv.icon}</span>
+                      <div style={{ flex: 1, fontSize: 12.5, color: sv.fg, lineHeight: 1.5 }}>
+                        {iss.message}
+                        {n && <div style={{ fontSize: 10.5, marginTop: 3, opacity: 0.75 }}>→ click to jump to this block</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ padding: "10px 18px", borderTop: "1px solid #e2e8f0", fontSize: 10.5, color: "#94a3b8" }}>
+                Runs instantly on your current canvas — no save needed, nothing leaves your browser.
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ============ BROADCAST: one message to every past WhatsApp contact ============ */}
       {bcOpen && (
