@@ -123,7 +123,7 @@ async function sendEmailSmtp(c, vars) {
    customer types 0 to continue the flow. Keys are used server-side only. */
 
 const AI_PROVIDERS = new Set(["anthropic", "openai", "gemini"]);
-const AI_DEFAULT_MODELS = { anthropic: "claude-haiku-4-5", openai: "gpt-5-mini", gemini: "gemini-2.5-flash" };
+const AI_DEFAULT_MODELS = { anthropic: "claude-haiku-4-5", openai: "gpt-5-mini", gemini: "gemini-3.6-flash" };
 
 async function aiReply(c, history, userText, vars) {
   const provider = AI_PROVIDERS.has(c.provider) ? c.provider : "anthropic";

@@ -17,10 +17,10 @@ const NODE_W = 220;
 const MODEL_OPTIONS = {
   anthropic: ["claude-sonnet-5", "claude-fable-5", "claude-opus-4-8", "claude-haiku-4-5"],
   openai: ["gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-4o-mini"],
-  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-pro-preview"],
+  gemini: ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3-pro-preview", "gemini-2.5-flash", "gemini-2.5-pro"],
 };
 // cheap+fast defaults for the customer-facing AI Reply block (owner pays per message)
-const CHAT_MODEL_DEFAULTS = { anthropic: "claude-haiku-4-5", openai: "gpt-5-mini", gemini: "gemini-2.5-flash" };
+const CHAT_MODEL_DEFAULTS = { anthropic: "claude-haiku-4-5", openai: "gpt-5-mini", gemini: "gemini-3.6-flash" };
 
 // A model <select> that also keeps unknown/legacy model ids selectable.
 function ModelSelect({ value, provider, style, onChange }) {
