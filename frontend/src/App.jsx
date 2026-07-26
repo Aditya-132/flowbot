@@ -434,6 +434,12 @@ function runFlowDoctor(nodes, edges) {
       issues.push({ severity: "warn", nodeId: n.id, message: `"${typeInfo(n).label}" is unreachable — no path from Welcome leads here yet.` });
       continue; // unreachable already explains any "dead" outputs below it
     }
+    // a menu with zero options renders an empty list — nothing a customer types can
+    // ever match, so everyone who reaches it is permanently stuck. The port check
+    // below can't catch this: zero options means zero expected output ports.
+    if (menuLikeTypes.has(n.type) && !(n.config?.options || []).length) {
+      issues.push({ severity: "error", nodeId: n.id, message: `"${typeInfo(n).label}" has no options — nothing a customer types can match, so anyone who reaches it is permanently stuck.` });
+    }
     // terminal blocks (goodbye) really have 0 outputs — outputCount() clamps 0 to 1
     // for canvas port rendering, which would flag every goodbye as a fake dead end
     const outFn = NODE_TYPES[n.type]?.outputs;
@@ -631,6 +637,26 @@ function Builder({ user, onAuthed, onLogout }) {
   function gotoDoctorIssue(nodeId) {
     if (!nodeId) return;
     setDoctorOpen(false);
+    setTab(0); setSel(nodeId);
+    setTimeout(() => document.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }), 60);
+  }
+
+  /* ---------- Chaos Test: 100 simulated messy customers hammer the draft ---------- */
+  const [chaosOpen, setChaosOpen] = useState(false);
+  const [chaosBusy, setChaosBusy] = useState(false);
+  const [chaosReport, setChaosReport] = useState(null); // {score, weakSpots, ...}
+  async function runChaosTest() {
+    setChaosBusy(true); setChaosOpen(true); setChaosReport(null);
+    try {
+      const body = { nodes: nodes.map(({ id, type, config }) => ({ id, type, config })), edges };
+      setChaosReport(await api.chaos(body));
+    } catch (e) { setChaosOpen(false); flash("Chaos Test failed: " + e.message, true); }
+    finally { setChaosBusy(false); }
+  }
+  function gotoChaosIssue(nodeId) {
+    if (!nodeId) return;
+    setChaosOpen(false);
     setTab(0); setSel(nodeId);
     setTimeout(() => document.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }), 60);
@@ -1280,6 +1306,13 @@ function Builder({ user, onAuthed, onLogout }) {
               🕰 Time Machine
             </button>
           )}
+          {tab === 0 && (
+            <button onClick={runChaosTest}
+              title="100 simulated messy customers — typos, emoji, blank messages, wrong numbers, out-of-range choices — hammer this draft to find where real customers would get stuck. Dry-run, no save needed."
+              style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5 }}>
+              🌪 Chaos Test
+            </button>
+          )}
           <div data-tour="tabs" style={{ display: "flex", gap: 6 }}>
             {(isMobile ? ["🎨 Design", "💻 Code", "🚀 Go live"] : ["1 · Design flow", "2 · Bot code", "3 · Activate & test"]).map((t, i) => (
               <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
@@ -1677,6 +1710,98 @@ function Builder({ user, onAuthed, onLogout }) {
           </div>
         );
       })()}
+
+      {/* ============ CHAOS TEST: 100 simulated messy customers ============ */}
+      {chaosOpen && (
+        <div style={S.overlay} onClick={() => setChaosOpen(false)}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "min(620px, 94vw)", maxHeight: "86vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(15,23,42,.3)" }}
+            onClick={(e) => e.stopPropagation()}>
+            {chaosBusy || !chaosReport ? (<>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderBottom: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: 22 }}>🌪</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>Chaos Test</div>
+                  <div style={{ fontSize: 11.5, color: "#64748b" }}>100 messy simulated customers vs your draft</div>
+                </div>
+                <button style={S.miniBtn} onClick={() => setChaosOpen(false)}>✕ close</button>
+              </div>
+              <div style={{ padding: 40, textAlign: "center", color: "#64748b", fontSize: 13 }}>
+                🌪 Unleashing 100 messy customers on your draft…<br />
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>typos · emoji · blank messages · wrong numbers · out-of-range choices — all dry-run, nothing real is sent</span>
+              </div>
+            </>) : (() => {
+              const r = chaosReport;
+              const scoreColor = r.score >= 90 ? "#059669" : r.score >= 70 ? "#d97706" : "#dc2626";
+              const allClear = !r.weakSpots.length && !r.faqSpots.length && !r.loops;
+              return (<>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderBottom: "1px solid #e2e8f0" }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 16, fontWeight: 800, color: scoreColor, border: `3px solid ${scoreColor}`, background: scoreColor + "12",
+                  }}>{r.score}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800 }}>🌪 Chaos Test — resilience</div>
+                    <div style={{ fontSize: 11.5, color: "#64748b" }}>
+                      {r.clean} of {r.customers} messy customers got through without getting stuck · {r.turns} messages sent, {r.rejections} rejected
+                    </div>
+                  </div>
+                  <button style={S.miniBtn} onClick={() => setChaosOpen(false)}>✕ close</button>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+                  {allClear && (
+                    <div style={{ padding: 30, textAlign: "center", color: "#059669", fontSize: 13, fontWeight: 700, lineHeight: 1.7 }}>
+                      💪 Typos, emoji, blanks, wrong numbers — nobody got stuck.<br />This flow can take a beating. Ship it.
+                    </div>
+                  )}
+                  {r.loops > 0 && (
+                    <div style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 10, background: "#fef2f2", border: "1px solid #fca5a5", fontSize: 12.5, color: "#b91c1c", lineHeight: 1.5 }}>
+                      🌀 {r.loops} message{r.loops === 1 ? "" : "s"} triggered a burst of 40+ replies — some blocks likely form a loop with no question in between. Check wires that point backwards.
+                    </div>
+                  )}
+                  {r.weakSpots.map((w) => {
+                    const n = nodes.find((x) => x.id === w.nodeId);
+                    return (
+                      <div key={w.nodeId} onClick={() => gotoChaosIssue(w.nodeId)}
+                        style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 10, background: "#fef2f2", border: "1px solid #fca5a5", cursor: n ? "pointer" : "default" }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 800, color: "#b91c1c" }}>
+                          🚧 {n ? typeInfo(n).label : "A block"} — {w.stuckCustomers} customer{w.stuckCustomers === 1 ? "" : "s"} got stuck here
+                        </div>
+                        <div style={{ fontSize: 11, color: "#991b1b", marginTop: 2 }}>
+                          rejected {w.rejections} of {w.attempts} messy inputs · worst: {w.worstStreak} misses in a row
+                        </div>
+                        {w.sample && (
+                          <div style={{ fontSize: 11, color: "#7f1d1d", marginTop: 6, background: "#fff", border: "1px solid #fecaca", borderRadius: 8, padding: 8, lineHeight: 1.5 }}>
+                            customer sent: <b>“{w.sample.sent}”</b><br />
+                            bot replied: <span style={{ whiteSpace: "pre-wrap" }}>“{w.sample.reply}”</span>
+                          </div>
+                        )}
+                        {n && <div style={{ fontSize: 10.5, marginTop: 4, color: "#b91c1c", opacity: 0.75 }}>→ click to jump to this block</div>}
+                      </div>
+                    );
+                  })}
+                  {r.faqSpots.map((f) => {
+                    const n = nodes.find((x) => x.id === f.nodeId);
+                    return (
+                      <div key={f.nodeId} onClick={() => gotoChaosIssue(f.nodeId)}
+                        style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 10, background: "#eff6ff", border: "1px solid #93c5fd", fontSize: 12.5, color: "#1d4ed8", cursor: n ? "pointer" : "default", lineHeight: 1.5 }}>
+                        💬 {n ? typeInfo(n).label : "FAQ"} answered only {f.asked - f.missed} of {f.asked} chaos questions — add more keywords so fewer real questions fall through.
+                      </div>
+                    );
+                  })}
+                  {r.deadEnds > 0 && (
+                    <div style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 10, background: "#fffbeb", border: "1px solid #fcd34d", fontSize: 12.5, color: "#92400e", lineHeight: 1.5 }}>
+                      🕳 {r.deadEnds} time{r.deadEnds === 1 ? "" : "s"} the conversation fell off an unwired branch mid-chat (the bot papered over it with a generic “that's all for now”). Run 🩺 Flow Doctor to find the loose ports.
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: "10px 18px", borderTop: "1px solid #e2e8f0", fontSize: 10.5, color: "#94a3b8" }}>
+                  Seeded &amp; fully dry-run — the same canvas always gets the same chaos, and nothing real is sent (APIs, emails and AI are stubbed). No save needed.
+                </div>
+              </>);
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* ============ BROADCAST: one message to every past WhatsApp contact ============ */}
       {bcOpen && (

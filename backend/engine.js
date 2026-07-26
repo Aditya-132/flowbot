@@ -843,4 +843,4 @@ async function processMessage(flow, text, session, trace, dryRun) {
   return handleMessage(flow, text, session, trace, dryRun);
 }
 
-module.exports = { handleMessage, interp };
+module.exports = { handleMessage, interp, menuTypes };

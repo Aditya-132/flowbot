@@ -12,6 +12,7 @@ const path = require("path");
 const store = require("./store");
 const auth = require("./auth");
 const { handleMessage } = require("./engine");
+const { runChaos } = require("./chaos");
 const { generateFlow } = require("./assistant");
 const { generateStandalone, generateProject } = require("./codegen");
 const { buildZip } = require("./zip");
@@ -590,6 +591,20 @@ app.post("/api/flows/:id/timemachine", wrap(async (req, res) => {
     same: results.filter((r) => r.same).length,
     changed: results.filter((r) => !r.same),
   });
+}));
+
+/* ------------------- Chaos Test: 100 simulated messy customers -------------------
+   Hammers the DRAFT on the canvas (no save needed) with typos, emoji, blank
+   messages, out-of-range numbers and wrong formats, then reports where customers
+   get stuck. Dry-run engine ⇒ no HTTP/email/AI ever fires; seeded PRNG ⇒ the
+   same canvas always yields the same report. Open to guests like the canvas
+   itself — the workload is fixed server-side and validateFlow caps flow size. */
+app.post("/api/chaos", wrap(async (req, res) => {
+  const err = validateFlow(req.body || {});
+  if (err) return res.status(400).json({ error: err });
+  if (!req.body.nodes.some((n) => n.type === "welcome"))
+    return res.status(400).json({ error: "Add a Welcome block first — chaos customers need an entry point." });
+  res.json(await runChaos({ nodes: req.body.nodes, edges: req.body.edges }));
 }));
 
 /* ------------------- Live inbox: history + human takeover ------------------- */

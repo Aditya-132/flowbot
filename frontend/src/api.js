@@ -43,6 +43,7 @@ export const api = {
   funnel: (id) => get(`/api/flows/${id}/funnel`).then(j),
   replay: (id, key) => get(`/api/flows/${id}/replay?key=${encodeURIComponent(key)}`).then(j),
   timeMachine: (id, body) => send(`/api/flows/${id}/timemachine`, "POST", body).then(j),
+  chaos: (body) => send("/api/chaos", "POST", body).then(j),
   inbox: (id) => get(`/api/flows/${id}/inbox`).then(j),
   inboxThread: (id, key) => get(`/api/flows/${id}/inbox/thread?key=${encodeURIComponent(key)}`).then(j),
   inboxAgent: (id, key, on) => send(`/api/flows/${id}/inbox/agent`, "POST", { key, on }).then(j),
