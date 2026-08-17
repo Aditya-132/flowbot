@@ -9,11 +9,24 @@ const { Pool } = require("pg");
 const DB_URL =
   process.env.DATABASE_URL || "postgres://flowbot:flowbot@localhost:5432/flowbot";
 
+// Local Postgres runs without TLS; managed clouds (Neon, Supabase, Railway…)
+// require it. Detect a local host and skip SSL only there.
+const isLocalDb = /@(localhost|127\.0\.0\.1)[:/]/.test(DB_URL);
+
 const pool = new Pool({
   connectionString: DB_URL,
   // Fail fast instead of hanging forever when the DB host is unreachable
   // (e.g. platform private networking not ready yet) — startup retries instead.
   connectionTimeoutMillis: 10000,
+  ...(isLocalDb
+    ? {}
+    : {
+        ssl: { rejectUnauthorized: false },
+        // On serverless (Vercel) many short-lived instances share the DB;
+        // keep each instance's pool small so we don't exhaust connections.
+        // Use Neon's pooled connection string for real concurrency.
+        max: process.env.VERCEL ? 3 : 10,
+      }),
 });
 
 // Host:port only — safe to log, and tells deploy logs which DB is being dialed.
@@ -155,6 +168,20 @@ async function init() {
   `);
 }
 
+// Serverless-safe schema init: run init() at most once per instance, memoizing
+// only on success so a transient DB error doesn't poison every later request.
+// Both the long-running server and each Vercel cold start funnel through this.
+let readyPromise = null;
+function ready() {
+  if (!readyPromise) {
+    readyPromise = init().catch((e) => {
+      readyPromise = null;
+      throw e;
+    });
+  }
+  return readyPromise;
+}
+
 const rowToFlow = (r) =>
   r && {
     id: r.id,
@@ -177,6 +204,7 @@ const rowToFlow = (r) =>
 
 module.exports = {
   init,
+  ready,
   pool,
   dbTarget,
 

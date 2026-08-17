@@ -31,6 +31,14 @@ app.use(express.urlencoded({ extended: false })); // Twilio posts urlencoded
 // async route wrapper → any thrown/rejected error hits the error middleware
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+// On serverless (Vercel) there is no startup phase, so the schema is created
+// lazily on the first request. store.ready() is memoized, so this is a cheap
+// awaited no-op once the tables exist. Registered before any route so every
+// handler is guaranteed a ready database.
+app.use((req, res, next) => {
+  store.ready().then(() => next()).catch(next);
+});
+
 // Chat sessions persist in Postgres (key = botId + "|" + sender), so live
 // conversations survive restarts and deploys. runBot handles one incoming
 // message end-to-end: load session → engine → save session → log analytics
@@ -121,10 +129,15 @@ function handleInbound(f, channel, incoming, sendFn, sendMediaFn) {
     .catch((e) => console.error(`${channel} inbound failed:`, e.message));
 }
 
-setInterval(() => {
-  store.cleanupChatSessions(12).catch(() => {});
-  store.cleanupChatMessages(30).catch(() => {});
-}, 10 * 60 * 1000).unref();
+// Background timers only run on a persistent process. On Vercel there is no
+// long-lived process to host them, so the periodic cleanup runs from the same
+// cron request that drives broadcasts (see /api/cron/broadcasts).
+if (!process.env.VERCEL) {
+  setInterval(() => {
+    store.cleanupChatSessions(12).catch(() => {});
+    store.cleanupChatMessages(30).catch(() => {});
+  }, 10 * 60 * 1000).unref();
+}
 
 // Push a message to a customer on whatever channel they used. Widget/share
 // conversations have no push channel — the chat page polls for agent replies.
@@ -705,7 +718,28 @@ async function processBroadcasts() {
     }
   }
 }
-setInterval(() => processBroadcasts().catch((e) => console.error("broadcast tick failed:", e.message)), 15000).unref();
+// A persistent host drains the broadcast queue on a 15s timer. Serverless has
+// no background timer, so on Vercel this same work is triggered by a cron hit
+// to /api/cron/broadcasts (configured in vercel.json).
+if (!process.env.VERCEL) {
+  setInterval(() => processBroadcasts().catch((e) => console.error("broadcast tick failed:", e.message)), 15000).unref();
+}
+
+// Cron entry point (Vercel Cron / any external scheduler). Drains queued
+// broadcasts and runs session/message cleanup — the serverless stand-in for the
+// background timers above. Vercel automatically sends "Authorization: Bearer
+// <CRON_SECRET>" when a CRON_SECRET env var is set; enforce it when present so
+// the endpoint can't be triggered by the public.
+app.get("/api/cron/broadcasts", wrap(async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  await processBroadcasts();
+  store.cleanupChatSessions(12).catch(() => {});
+  store.cleanupChatMessages(30).catch(() => {});
+  res.json({ ok: true });
+}));
 
 // Two-tier rate limit for the public chat API. Tight enough to stop floods,
 // loose enough that a fast human demo (or a few visitors behind one office
@@ -720,10 +754,15 @@ const bucketAllowed = (k, limit) => {
   chatBuckets.set(k, recent);
   return true;
 };
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, b] of chatBuckets) if (!b.some((t) => now - t < RATE_WINDOW_MS)) chatBuckets.delete(k);
-}, 60000).unref();
+// In-memory rate-limit buckets are per-instance; on serverless they reset with
+// each cold start (acceptable — the DB-backed features are the real guard). The
+// sweeper only matters for a long-lived process.
+if (!process.env.VERCEL) {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, b] of chatBuckets) if (!b.some((t) => now - t < RATE_WINDOW_MS)) chatBuckets.delete(k);
+  }, 60000).unref();
+}
 
 app.post("/api/public/:key/chat", wrap(async (req, res) => {
   const f = await store.getByPublicKey(req.params.key);
@@ -912,25 +951,33 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: "internal error" });
 });
 
-/* ------------------- Startup: init DB, then listen ------------------- */
-// Retry in-process so a DB that's a few seconds late (private networking DNS,
-// container ordering) doesn't turn into a crash-restart loop and a failed
-// healthcheck. Each attempt is bounded by the pool's connection timeout.
-const DB_INIT_ATTEMPTS = 5;
-(async () => {
-  console.log(`Connecting to Postgres at ${store.dbTarget()}...`);
-  for (let attempt = 1; ; attempt++) {
-    try {
-      await store.init();
-      break;
-    } catch (e) {
-      console.error(`Postgres init failed (attempt ${attempt}/${DB_INIT_ATTEMPTS}): ${e.message}`);
-      if (attempt >= DB_INIT_ATTEMPTS) {
-        console.error("Failed to connect to Postgres. Set DATABASE_URL or start the DB (docker compose up -d).");
-        process.exit(1);
+/* ------------------- Startup ------------------- */
+// The Express app is the module's export. On Vercel (api/index.js re-exports it)
+// there is no server to start — the platform invokes the app per request and the
+// schema is created lazily by the store.ready() gate above.
+module.exports = app;
+
+// On a persistent host (local, Render, Fly, Railway…) we own the process, so
+// eagerly connect and listen. Retry in-process so a DB that's a few seconds late
+// (private networking DNS, container ordering) doesn't turn into a crash-restart
+// loop and a failed healthcheck. Each attempt is bounded by the pool's timeout.
+if (!process.env.VERCEL) {
+  const DB_INIT_ATTEMPTS = 5;
+  (async () => {
+    console.log(`Connecting to Postgres at ${store.dbTarget()}...`);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await store.ready();
+        break;
+      } catch (e) {
+        console.error(`Postgres init failed (attempt ${attempt}/${DB_INIT_ATTEMPTS}): ${e.message}`);
+        if (attempt >= DB_INIT_ATTEMPTS) {
+          console.error("Failed to connect to Postgres. Set DATABASE_URL or start the DB (docker compose up -d).");
+          process.exit(1);
+        }
+        await new Promise((r) => setTimeout(r, attempt * 2000));
       }
-      await new Promise((r) => setTimeout(r, attempt * 2000));
     }
-  }
-  app.listen(PORT, () => console.log(`FlowBot backend on http://localhost:${PORT} (Postgres)`));
-})();
+    app.listen(PORT, () => console.log(`FlowBot backend on http://localhost:${PORT} (Postgres)`));
+  })();
+}
