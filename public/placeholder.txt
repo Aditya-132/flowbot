@@ -1,0 +1,1 @@
+This folder exists only so Vercel finds an output directory. The app itself is served by api/index.js.
