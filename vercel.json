@@ -11,6 +11,6 @@
     { "source": "/(.*)", "destination": "/api/index" }
   ],
   "crons": [
-    { "path": "/api/cron/broadcasts", "schedule": "*/1 * * * *" }
+    { "path": "/api/cron/broadcasts", "schedule": "0 3 * * *" }
   ]
 }
