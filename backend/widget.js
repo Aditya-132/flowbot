@@ -146,9 +146,9 @@ button.send{background:#25D366;border:0;border-radius:50%;width:44px;height:44px
   try{sid=localStorage.getItem(sidKey);}catch(e){}
   if(!sid){sid=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);try{localStorage.setItem(sidKey,sid);}catch(e){}}
   function add(text,side){var d=document.createElement("div");d.className="b "+side;d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;}
-  var busy=false;
+  var busy=false,after=null,agentOn=false,delay=8000,timer=0,panelOpen=true;
   function send(text,reset){
-    if(busy)return;busy=true;
+    if(busy)return;busy=true;kick();
     var t=add("…","bot typing");
     fetch("/api/public/"+KEY+"/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:sid,message:text,reset:!!reset})})
       .then(function(r){return r.json();})
@@ -159,19 +159,38 @@ button.send{background:#25D366;border:0;border-radius:50%;width:44px;height:44px
   form.addEventListener("submit",function(e){e.preventDefault();var v=inp.value.trim();if(!v||busy)return;add(v,"me");inp.value="";send(v);});
   document.getElementById("reset").addEventListener("click",function(){msgs.innerHTML="";send("hi",true);});
   send("hi",true);
-  // poll for human (inbox takeover) replies; first call only learns the cursor
-  var sub=document.getElementById("sub"),after=null,agentOn=false;
+  // poll for human (inbox takeover) replies; first call only learns the cursor.
+  // Backs off while idle; pauses when the tab or the embedded panel is hidden.
+  var sub=document.getElementById("sub"),BASE=8000,MAX=60000;
+  window.addEventListener("message",function(e){
+    if(e.source!==window.parent||!e.data||e.data.flowbot!=="panel")return;
+    panelOpen=!!e.data.open;
+    if(panelOpen)kick();
+  });
+  document.addEventListener("visibilitychange",function(){if(!document.hidden)kick();});
   function poll(){
-    fetch("/api/public/"+KEY+"/updates?sessionId="+sid+(after===null?"":"&after="+after))
+    if(after!==null&&(document.hidden||!panelOpen))return Promise.resolve(false);
+    return fetch("/api/public/"+KEY+"/updates?sessionId="+sid+(after===null?"":"&after="+after))
       .then(function(r){return r.ok?r.json():null;})
       .then(function(d){
-        if(!d||typeof d.last!=="number")return;
+        if(!d||typeof d.last!=="number")return false;
+        var fresh=after!==null&&(d.messages||[]).length>0;
         if(after!==null)(d.messages||[]).forEach(function(m){add(m.body,"bot");});
         after=d.last;
-        if(d.agent!==agentOn){agentOn=d.agent;sub.textContent=agentOn?"🧑 a teammate is replying":"usually replies instantly";}
-      }).catch(function(){});
+        var changed=d.agent!==agentOn;
+        if(changed){agentOn=d.agent;sub.textContent=agentOn?"🧑 a teammate is replying":"usually replies instantly";}
+        return fresh||changed;
+      }).catch(function(){return false;});
   }
-  poll();setInterval(poll,3500);
+  function schedule(ms){clearTimeout(timer);timer=setTimeout(tick,ms);}
+  function kick(){delay=BASE;schedule(500);}
+  function tick(){
+    poll().then(function(active){
+      delay=(active||agentOn)?BASE:Math.min(delay*1.5,MAX);
+      schedule(delay);
+    });
+  }
+  kick();
 })();
 </script>
 </body>
@@ -206,6 +225,7 @@ function renderWidgetJs(canonical) {
       document.body.appendChild(frame);
     }
     if (frame) frame.style.display = open ? "block" : "none";
+    if (frame && frame.contentWindow) { try { frame.contentWindow.postMessage({ flowbot: "panel", open: open }, origin); } catch (e) {} }
     btn.innerHTML = open
       ? '<svg width="22" height="22" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>'
       : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 3C7 3 3 6.6 3 11c0 2.1.9 4 2.4 5.4L4.5 20c-.1.4.3.8.7.6l3.6-1.5c1 .3 2.1.4 3.2.4 5 0 9-3.6 9-8S17 3 12 3z" fill="#fff"/></svg>';
