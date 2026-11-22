@@ -202,6 +202,35 @@ const rowToFlow = (r) =>
     shareEnabled: r.share_enabled,
   };
 
+// ---------- flow read cache ----------
+// get() and getByPublicKey() run on every inbound message and on every widget
+// poll, and each used to pull the whole flow row (nodes, edges, provider
+// credentials) from the DB. Keep recent rows in memory instead. Writers below
+// drop the entry. The cache is per process: on serverless (Vercel) every warm
+// instance has its own copy, so the TTL is shorter there.
+const FLOW_TTL_MS = Number(process.env.FLOW_CACHE_TTL_MS) || (process.env.VERCEL ? 10000 : 30000);
+const FLOW_CACHE_MAX = 500;
+const flowCache = new Map(); // id -> { flow, exp }
+const keyToId = new Map(); // publicKey -> { id, exp }
+const cloneFlow = (f) => (f ? structuredClone(f) : f);
+
+function dropFlow(id) {
+  flowCache.delete(id);
+  for (const [k, v] of keyToId) if (v.id === id) keyToId.delete(k);
+}
+
+async function getFlow(id) {
+  const hit = flowCache.get(id);
+  if (hit && hit.exp > Date.now()) return cloneFlow(hit.flow);
+  const { rows } = await pool.query(`SELECT * FROM flows WHERE id = $1`, [id]);
+  const flow = rowToFlow(rows[0]);
+  if (flow) {
+    if (flowCache.size >= FLOW_CACHE_MAX) flowCache.delete(flowCache.keys().next().value);
+    flowCache.set(id, { flow, exp: Date.now() + FLOW_TTL_MS });
+  }
+  return cloneFlow(flow);
+}
+
 module.exports = {
   init,
   ready,
@@ -223,10 +252,7 @@ module.exports = {
     }));
   },
 
-  get: async (id) => {
-    const { rows } = await pool.query(`SELECT * FROM flows WHERE id = $1`, [id]);
-    return rowToFlow(rows[0]);
-  },
+  get: getFlow,
 
   upsert: async (flow) => {
     const { rows } = await pool.query(
@@ -262,19 +288,25 @@ module.exports = {
         flow.whinta ? JSON.stringify(flow.whinta) : null,
       ]
     );
+    dropFlow(flow.id);
     return rowToFlow(rows[0]);
   },
 
   remove: async (id) => {
     await pool.query(`DELETE FROM flows WHERE id = $1`, [id]);
+    dropFlow(id);
     await pool.query(`DELETE FROM chat_sessions WHERE bot_id = $1`, [id]);
     await pool.query(`DELETE FROM bot_events WHERE bot_id = $1`, [id]);
   },
 
   /* ---------- public exposure (widget embed + share page) ---------- */
   getByPublicKey: async (key) => {
-    const { rows } = await pool.query(`SELECT * FROM flows WHERE public_key = $1`, [key]);
-    return rowToFlow(rows[0]);
+    const hit = keyToId.get(key);
+    if (hit && hit.exp > Date.now()) return getFlow(hit.id);
+    const { rows } = await pool.query(`SELECT id FROM flows WHERE public_key = $1`, [key]);
+    if (!rows[0]) return null;
+    keyToId.set(key, { id: rows[0].id, exp: Date.now() + FLOW_TTL_MS });
+    return getFlow(rows[0].id);
   },
 
   setPublic: async (id, { publicKey, widgetEnabled, shareEnabled }) => {
@@ -286,6 +318,7 @@ module.exports = {
        WHERE id = $1 RETURNING *`,
       [id, publicKey ?? null, widgetEnabled ?? null, shareEnabled ?? null]
     );
+    dropFlow(id);
     return rowToFlow(rows[0]);
   },
 
@@ -397,7 +430,7 @@ module.exports = {
   inboxList: async (botId, limit = 50) => {
     const { rows } = await pool.query(
       `SELECT c.session_key, c.messages, m.channel, m.direction AS last_direction,
-              m.body AS last_body, m.ts AS last_ts,
+              left(m.body, 120) AS last_body, m.ts AS last_ts,
               COALESCE((s.data->>'agentMode')::boolean, false) AS agent_mode
        FROM (
          SELECT session_key, MAX(id) AS last_id, COUNT(*)::int AS messages
