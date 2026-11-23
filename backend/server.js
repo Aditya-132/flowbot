@@ -45,7 +45,7 @@ app.use((req, res, next) => {
 // events, message history and the per-block funnel trace (the simulator is
 // excluded from all logging). When the owner has taken a conversation over
 // from the inbox (session.agentMode), the bot stays silent.
-async function runBot(flow, channel, from, text) {
+async function runBot(flow, channel, from, text, metadata = {}) {
   const key = `${flow.id}|${from}`;
   const session = (await store.getChatSession(key)) || { state: null, vars: {} };
   const live = channel !== "simulator";
@@ -56,7 +56,7 @@ async function runBot(flow, channel, from, text) {
     return [];
   }
   const trace = live ? [] : null;
-  const replies = await handleMessage(flow, text, session, trace);
+  const replies = await handleMessage(flow, text, session, trace, false, metadata);
   await store.saveChatSession(key, flow.id, session);
   if (live) {
     store.logEvent(flow.id, channel, key, replies.length).catch(() => {});
@@ -87,28 +87,41 @@ function parseControl(m) {
     try { return { kind: "media", spec: JSON.parse(rest.slice(6)) }; }
     catch { return { kind: "media", spec: null }; }
   }
+  if (rest.startsWith("LIST:")) {
+    try { return { kind: "list", spec: JSON.parse(rest.slice(5)) }; }
+    catch { return { kind: "list", spec: null }; }
+  }
   return { kind: "unknown" };
 }
 
-// Render replies for a surface that can't act on markers (simulator, twilio, widget,
-// chat log): drop pauses, turn media into a caption + link, pass plain text through.
+// Render replies for surfaces that cannot act on native control markers (simulator,
+// Twilio, widget, chat log): drop pauses and turn media/lists into readable text.
 const stripControl = (replies) => {
   const out = [];
   for (const m of replies) {
     const ctl = parseControl(m);
     if (!ctl) { out.push(m); continue; }
     if (ctl.kind === "media" && ctl.spec) out.push(mediaFallbackText(ctl.spec));
+    if (ctl.kind === "list" && ctl.spec) out.push(ctl.spec.fallback || ctl.spec.body || "Please choose an option.");
   }
   return out;
 };
 
-// Deliver replies over a live channel: pause on Delay, send native media when the
-// channel supports it (sendMediaFn), otherwise fall back to a caption + link.
-async function deliverReplies(sendFn, replies, sendMediaFn) {
+// Deliver replies over a live channel: pause on Delay, send native media/lists when
+// supported by the provider adapter, otherwise fall back to readable text.
+async function deliverReplies(sendFn, replies, sendMediaFn, sendInteractiveFn) {
   for (const m of replies) {
     const ctl = parseControl(m);
     if (!ctl) { try { await sendFn(m); } catch (e) { console.error("send failed:", e.message); } continue; }
     if (ctl.kind === "delay") { await new Promise((r) => setTimeout(r, ctl.seconds * 1000)); continue; }
+    if (ctl.kind === "list") {
+      if (ctl.spec && sendInteractiveFn) {
+        try { await sendInteractiveFn(ctl.spec); continue; }
+        catch (e) { console.error("interactive list send failed, falling back to text:", e.message); }
+      }
+      if (ctl.spec) { try { await sendFn(ctl.spec.fallback || ctl.spec.body || "Please choose an option."); } catch (e) { console.error("send failed:", e.message); } }
+      continue;
+    }
     if (ctl.kind === "media") {
       if (ctl.spec && sendMediaFn) {
         try { await sendMediaFn(ctl.spec); continue; }
@@ -123,9 +136,9 @@ async function deliverReplies(sendFn, replies, sendMediaFn) {
 // background. A Delay/HTTP/SMTP block can take many seconds; blocking the webhook
 // response that long makes WhatsApp providers time out and RETRY, double-processing
 // the message. Fire-and-forget keeps each inbound handled exactly once.
-function handleInbound(f, channel, incoming, sendFn, sendMediaFn) {
-  runBot(f, channel, incoming.from, incoming.text)
-    .then((replies) => deliverReplies(sendFn, replies, sendMediaFn))
+function handleInbound(f, channel, incoming, sendFn, sendMediaFn, sendInteractiveFn) {
+  runBot(f, channel, incoming.from, incoming.text, { selectedId: incoming.selectedId })
+    .then((replies) => deliverReplies(sendFn, replies, sendMediaFn, sendInteractiveFn))
     .catch((e) => console.error(`${channel} inbound failed:`, e.message));
 }
 
@@ -463,7 +476,8 @@ app.post("/meta/webhook/:id", wrap(async (req, res) => {
   res.sendStatus(200); // ack fast so the provider doesn't retry while we process
   handleInbound(f, "meta", incoming,
     (msg) => metaApi.sendText(f.meta, incoming.from, msg),
-    (spec) => metaApi.sendMedia(f.meta, incoming.from, spec));
+    (spec) => metaApi.sendMedia(f.meta, incoming.from, spec),
+    (spec) => metaApi.sendInteractiveList(f.meta, incoming.from, spec));
 }));
 
 /* ------------------- Green API webhook ------------------- */
