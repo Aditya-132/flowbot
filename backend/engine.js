@@ -1,4 +1,3 @@
-
 // ============================================================
 // FlowBot Engine — deterministic flowchart interpreter.
 // NO AI anywhere. Used by live webhooks, simulator, and codegen.
@@ -67,6 +66,7 @@ async function httpRequest(c, vars) {
       const picked = c.jsonPath ? jsonPathPick(parsed, c.jsonPath) : parsed;
       value = picked === undefined ? "" : typeof picked === "object" ? JSON.stringify(picked) : String(picked);
     } catch { /* not JSON — keep the raw text */ }
+    // WhatsApp message bodies cap out near 4096 chars — keep stored values safe to echo
     return { ok: true, value: String(value).slice(0, 3500) };
   } catch (e) {
     return { ok: false, error: e.name === "AbortError" ? "timeout" : "network error" };
@@ -75,10 +75,13 @@ async function httpRequest(c, vars) {
   }
 }
 
-// Time Machine replay uses this stub instead of a real network call.
+// Time Machine replay uses this stub instead of a real network call — replaying a
+// past conversation must never re-fire a real HTTP request, re-append a sheet row,
+// or re-send an email. Always "succeeds" so branching matches the common case.
 const DRY_STUB = { ok: true, value: "[dry-run: network call skipped]" };
 
-// Send an email directly over SMTP.
+// Send an email directly over SMTP (e.g. Gmail + an App Password). The password
+// lives only on the server with the bot and is never echoed to customers.
 async function sendEmailSmtp(c, vars) {
   let nodemailer;
   try { nodemailer = require("nodemailer"); }
@@ -94,15 +97,15 @@ async function sendEmailSmtp(c, vars) {
     const transport = nodemailer.createTransport({
       host,
       port,
-      secure: port === 465,
+      secure: port === 465, // 465 = implicit TLS, 587 = STARTTLS
       auth: { user, pass },
-      connectionTimeout: 10000,
+      connectionTimeout: 10000, // don't let a bad host hang the flow
       greetingTimeout: 10000,
       socketTimeout: 15000,
     });
     await transport.sendMail({
       from: interp(c.from || "", vars).trim() || user,
-      to,
+      to, // nodemailer accepts a comma-separated list
       subject: interp(c.subject || "", vars),
       text: interp(c.body || "", vars),
     });
@@ -112,7 +115,12 @@ async function sendEmailSmtp(c, vars) {
   }
 }
 
-/* ---------- AI Reply block (BYOK — bring your own key) ---------- */
+/* ---------- AI Reply block (BYOK — bring your own key) ----------
+   Optional and off by default: the deterministic flow is untouched unless the
+   owner drops an AI Reply block AND pastes their own provider API key. When a
+   customer reaches the block, every message is answered by the owner's chosen
+   LLM (with the owner's business context as the system prompt) until the
+   customer types 0 to continue the flow. Keys are used server-side only. */
 
 const AI_PROVIDERS = new Set(["anthropic", "openai", "gemini"]);
 const AI_DEFAULT_MODELS = { anthropic: "claude-haiku-4-5", openai: "gpt-5-mini", gemini: "gemini-3.6-flash" };
@@ -143,6 +151,7 @@ async function aiReply(c, history, userText, vars) {
     };
     pick = (d) => (d.candidates?.[0]?.content?.parts || []).map((p) => p.text).filter(Boolean).join("\n");
   } else {
+    // OpenAI or any OpenAI-compatible provider (Groq, OpenRouter, Mistral…) via baseUrl
     const base = String(c.baseUrl || "https://api.openai.com").replace(/\/+$/, "");
     url = `${base}/v1/chat/completions`;
     let host;
@@ -183,8 +192,9 @@ function fieldName(node) {
   return node.config.field || "value";
 }
 
-/* ---------- auto-collect for missing variables ---------- */
-
+/* ---------- auto-collect for missing variables ----------
+   If a block is about to show a {var} nobody collected yet, the bot
+   first asks for it, saves the answer, then re-runs the block. */
 const SCAN_KEYS = ["message", "prompt", "question", "caption", "title", "openMessage", "closedMessage", "trueMessage", "falseMessage", "url", "code", "note", "value", "body"];
 
 const prettyVar = (k) =>
@@ -194,6 +204,7 @@ const askFor = (k) => `Before we continue — please share your ${prettyVar(k)}:
 
 function missingVar(node, vars) {
   const c = node.config || {};
+  // vars this block fills in by itself — never ask the user for these
   const own = new Set();
   if (collectConfig[node.type]) own.add(fieldName(node));
   if (node.type === "csat") own.add(c.field || "rating");
@@ -214,10 +225,15 @@ function missingVar(node, vars) {
       if (vars[k] === undefined && c[k] === undefined && !own.has(k)) return k;
     }
   }
+  // a condition on a variable nobody set yet should ask, not silently branch false
   if (node.type === "condition") {
     const f = c.field || "value";
     if (vars[f] === undefined && !own.has(f)) return f;
   }
+  // custom blocks: auto-collect {vars} referenced by steps that no step in the
+  // block ever provides itself — same convenience plain blocks already get, so
+  // {name} & co. get asked up front instead of printing literally (or being
+  // pulled in confusingly by a later plain block).
   if (node.type === "custom" && Array.isArray(c.steps)) {
     const provided = new Set();
     for (const s of c.steps) {
@@ -232,17 +248,23 @@ function missingVar(node, vars) {
     };
     for (const s of c.steps) {
       for (const key of STEP_SCAN) { const hit = scan(s[key]); if (hit) return hit; }
-      if (Array.isArray(s.options)) for (const o of s.options) {
-        const hit = scan(typeof o === "string" ? o : o?.title);
-        if (hit) return hit;
-      }
+      if (Array.isArray(s.options)) for (const o of s.options) { const hit = scan(o); if (hit) return hit; }
       if (Array.isArray(s.headers)) for (const h of s.headers) { const hit = scan(h?.key) || scan(h?.value); if (hit) return hit; }
     }
   }
   return null;
 }
 
-/* ---------- user-made custom blocks ---------- */
+/* ---------- user-made custom blocks ----------
+   A custom block is a list of deterministic steps stored in its config:
+     { kind: "say",    message }
+     { kind: "set",    field, value }
+     { kind: "ask",    question, field, validate: text|number|email|phone, ack? }
+     { kind: "api",    method, url, headers[], body, field, jsonPath, errorMessage }
+     { kind: "ai",     provider, apiKey, model, baseUrl, context, greeting, errorMessage }
+     { kind: "choice", prompt, options[] }  → branches to output port = option index
+   Steps run in order; ask/ai/choice pause for the user's reply (ai chats
+   until the customer types 0, then the remaining steps continue). */
 
 async function runCustomSteps(node, session, out, startIdx, interpFn, optionPromptFn, dryRun) {
   const steps = (node.config && Array.isArray(node.config.steps) ? node.config.steps : []);
@@ -265,18 +287,18 @@ async function runCustomSteps(node, session, out, startIdx, interpFn, optionProm
     } else if (s.kind === "ask") {
       out.push(interpFn(s.question || "Please share:", session.vars));
       session.state = `step|${node.id}|${i}`;
-      return true;
+      return true; // waiting for the user's answer
     } else if (s.kind === "ai") {
       out.push(interpFn(s.greeting || "🤖 You're chatting with our AI assistant now. Ask anything — type 0 to continue.", session.vars));
       session.state = `step|${node.id}|${i}`;
-      return true;
+      return true; // AI chat mode until the customer types 0
     } else if (s.kind === "choice") {
       out.push(optionPromptFn({ prompt: s.prompt, options: s.options }, session.vars));
       session.state = `step|${node.id}|${i}`;
       return true;
     }
   }
-  return false;
+  return false; // ran to the end without pausing
 }
 
 const ASK_VALIDATORS = {
@@ -290,56 +312,10 @@ const ASK_VALIDATORS = {
     t.replace(/\D/g, "").length >= 7 ? { value: t } : { error: "That doesn't look like a valid phone number — please send your full number." },
 };
 
-// Normalize both legacy string options and object options.
-function normalizeMenuOptions(options = []) {
-  if (!Array.isArray(options)) return [];
-
-  return options.map((option, i) => {
-    if (typeof option === "string") {
-      return {
-        id: `option_${i + 1}`,
-        title: option,
-      };
-    }
-
-    return {
-      id: String(option?.id || `option_${i + 1}`),
-      title: String(option?.title || option?.label || `Option ${i + 1}`),
-    };
-  });
-}
-
 function optionPrompt(c, vars, fallback = "Choose an option") {
-  const options = normalizeMenuOptions(c.options || []);
-  const lines = options.map((o, i) => `${i + 1}. ${interp(o.title, vars)}`).join("\n");
+  const options = c.options || [];
+  const lines = options.map((o, i) => `${i + 1}. ${o}`).join("\n");
   return `${interp(c.prompt || fallback, vars)}\n\n${lines}\n\nReply with a number.`;
-}
-
-function findMenuChoice(options, text) {
-  const lower = String(text || "").trim().toLowerCase();
-
-  const num = lower.match(/^(\d+)\s*[.)]?$/);
-  if (num) {
-    const idx = parseInt(num[1], 10) - 1;
-    if (idx >= 0 && idx < options.length) return idx;
-  }
-
-  const exactIdx = options.findIndex((o) =>
-    o.id.toLowerCase() === lower ||
-    o.title.toLowerCase() === lower
-  );
-
-  if (exactIdx >= 0) return exactIdx;
-
-  if (lower.length >= 3) {
-    const hits = options
-      .map((o, i) => o.title.toLowerCase().startsWith(lower) ? i : -1)
-      .filter((i) => i >= 0);
-
-    if (hits.length === 1) return hits[0];
-  }
-
-  return -1;
 }
 
 function catalogText(c, vars) {
@@ -373,20 +349,25 @@ function isOpenNow(c) {
 
 /**
  * Handle one incoming message against a flow.
- * @param {object} flow
- * @param {string} text
- * @param {object} session
- * @param {string[]} [trace]
- * @param {boolean} [dryRun]
- * @returns {Promise<string[]>}
+ * Async because http_request blocks / api steps call external APIs mid-flow.
+ * @param {object} flow     {nodes:[{id,type,config}], edges:[{from,fromPort,to}]}
+ * @param {string} text     incoming message body
+ * @param {object} session  mutable {state, vars}
+ * @param {string[]} [trace]  optional — collects the id of every block executed
+ * @param {boolean} [dryRun]  optional — Time Machine replay: skip real HTTP/email side
+ *                            effects (http_request, send_email, custom api steps)
+ * @returns {Promise<string[]>}  bot replies
  */
-async function handleMessage(flow, text, session, trace, dryRun) {
-  const replies = (await processMessage(flow, text, session, trace, dryRun)).map((r) => String(r ?? "").trim()).filter(Boolean);
+async function handleMessage(flow, text, session, trace, dryRun, metadata = {}) {
+  // drop empty strings so optional messages (blank condition/hours text) never
+  // reach the provider — WhatsApp APIs reject empty bodies
+  const replies = (await processMessage(flow, text, session, trace, dryRun, metadata)).map((r) => String(r ?? "").trim()).filter(Boolean);
+  // never leave the customer on silence when a branch dead-ends
   if (!replies.length) replies.push("✅ That's all for now. Send any message to start over.");
   return replies;
 }
 
-async function processMessage(flow, text, session, trace, dryRun) {
+async function processMessage(flow, text, session, trace, dryRun, metadata) {
   const out = [];
   const byId = Object.fromEntries(flow.nodes.map((n) => [n.id, n]));
   const next = (id, port) => getNext(flow, byId, id, port);
@@ -412,7 +393,10 @@ async function processMessage(flow, text, session, trace, dryRun) {
       }
 
       if (menuTypes.has(cur.type)) {
-        out.push(optionPrompt(c, session.vars, "Choose an option"));
+        if (cur.type === "interactive_list") {
+          const rows = (c.options || []).slice(0, 10).map((option, i) => ({ id: `${cur.id}_${i + 1}`, title: String(option).slice(0, 24) }));
+          out.push(`${CTRL}LIST:${JSON.stringify({ body: interp(c.prompt || "Choose an option", session.vars), buttonText: c.buttonText || "View options", sectionTitle: c.sectionTitle || "Options", rows, fallback: optionPrompt(c, session.vars, "Choose an option") })}`);
+        } else out.push(optionPrompt(c, session.vars, "Choose an option"));
         session.state = cur.id;
         return;
       }
@@ -453,6 +437,8 @@ async function processMessage(flow, text, session, trace, dryRun) {
           break;
 
         case "media": {
+          // Emit a control marker; providers with native media (Meta) send a real
+          // image/video/doc, everyone else falls back to a caption + link (server.js).
           const spec = { mediaType: c.mediaType || "image", url: interp(c.url || "", session.vars), caption: interp(c.caption || "", session.vars) };
           out.push(`${CTRL}MEDIA:${JSON.stringify(spec)}`);
           cur = next(cur.id, 0);
@@ -529,6 +515,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
           const tags = new Set(String(session.vars.tags || "").split(",").filter(Boolean));
           if (c.tag) tags.add(c.tag);
           session.vars.tags = Array.from(tags).join(",");
+          // an explicitly empty message means "tag silently"
           out.push(interp(c.message ?? `Tagged as ${c.tag}.`, session.vars));
           cur = next(cur.id, 0);
           break;
@@ -556,6 +543,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
           break;
 
         case "delay":
+          // control marker — deliverReplies() pauses here; other surfaces strip it
           out.push(`${CTRL}DELAY:${Math.max(1, Math.min(30, parseInt(c.seconds, 10) || 3))}`);
           cur = next(cur.id, 0);
           break;
@@ -576,6 +564,10 @@ async function processMessage(flow, text, session, trace, dryRun) {
         }
 
         case "send_email": {
+          // Two modes:
+          //  • smtp     → send directly via SMTP with the owner's app password
+          //  • endpoint → POST {to, subject, body} to any email endpoint (Apps Script / API)
+          // Branches on success/error like http_request.
           let r;
           if (dryRun) {
             r = DRY_STUB;
@@ -639,7 +631,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
     return out;
   }
 
-  // paused inside a custom block
+  // paused inside a custom block: handle the answer to that step, then resume
   if (session.state.startsWith("step|")) {
     const [, nodeId, idxStr] = session.state.split("|");
     const node = byId[nodeId];
@@ -668,6 +660,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
       if (!waiting) await continueOrEnd(node, 0);
       return out;
     }
+    // ai step: chat with the owner's LLM until the customer types 0, then resume steps
     if (s.kind === "ai") {
       if (t === "0" || /^(exit|menu|back)$/i.test(t)) {
         delete (session.aiHist || {})[`${nodeId}:${idx}`];
@@ -691,25 +684,28 @@ async function processMessage(flow, text, session, trace, dryRun) {
       }
       return out;
     }
-
-    // Custom choice step
-    const options = normalizeMenuOptions(s.options || []);
-    const idx2 = findMenuChoice(options, t);
-
+    // choice step: same matching rules as menus, then branch to that port
+    const options = s.options || [];
+    const lower = t.toLowerCase();
+    const num = t.match(/^(\d+)\s*[.)]?$/);
+    let idx2 = num ? parseInt(num[1], 10) - 1 : -1;
+    if (!(idx2 >= 0 && idx2 < options.length)) idx2 = options.findIndex((o) => String(o).toLowerCase() === lower);
+    if (idx2 < 0 && lower.length >= 3) {
+      const hits = options.map((o, i) => (String(o).toLowerCase().startsWith(lower) ? i : -1)).filter((i) => i >= 0);
+      if (hits.length === 1) idx2 = hits[0];
+    }
     if (idx2 >= 0 && idx2 < options.length) {
-      const selected = options[idx2];
       session.state = null;
-      session.vars.choice = selected.title;
-      session.vars.choice_id = selected.id;
-      if (s.field) session.vars[s.field] = selected.title;
+      session.vars.choice = options[idx2];
+      if (s.field) session.vars[s.field] = options[idx2];
       await continueOrEnd(node, idx2);
     } else {
-      out.push(`Sorry, I didn't catch that.\n\n${optionPrompt({ prompt: s.prompt, options: s.options }, session.vars)}`);
+      out.push(`Sorry, I didn't catch that.\n\n${optionPrompt({ prompt: s.prompt, options }, session.vars)}`);
     }
     return out;
   }
 
-  // waiting on an auto-collected variable
+  // waiting on an auto-collected variable: save the answer, re-run the block
   if (session.state.startsWith("ask|")) {
     const [, nodeId, varName] = session.state.split("|");
     const node = byId[nodeId];
@@ -734,20 +730,27 @@ async function processMessage(flow, text, session, trace, dryRun) {
   const c = cur.config || {};
 
   if (menuTypes.has(cur.type)) {
-    const options = normalizeMenuOptions(c.options || []);
-    const idx = findMenuChoice(options, t);
-
+    const options = c.options || [];
+    const lower = t.toLowerCase();
+    // Native WhatsApp list replies carry a stable row ID; prefer it over display text.
+    const selectedId = metadata?.selectedId;
+    let idx = selectedId && cur.type === "interactive_list" ? options.findIndex((_, i) => selectedId === `${cur.id}_${i + 1}`) : -1;
+    // accept the option number ("2", "2." or "2)"), the exact option text, or an unambiguous prefix
+    const num = t.match(/^(\d+)\s*[.)]?$/);
+    if (!(idx >= 0 && idx < options.length)) idx = num ? parseInt(num[1], 10) - 1 : -1;
+    if (!(idx >= 0 && idx < options.length)) {
+      idx = options.findIndex((o) => String(o).toLowerCase() === lower);
+    }
+    if (idx < 0 && lower.length >= 3) {
+      const prefixHits = options
+        .map((o, i) => (String(o).toLowerCase().startsWith(lower) ? i : -1))
+        .filter((i) => i >= 0);
+      if (prefixHits.length === 1) idx = prefixHits[0];
+    }
     if (idx >= 0 && idx < options.length) {
-      const selected = options[idx];
-
-      session.vars[`${cur.type}_choice`] = selected.title;
-      session.vars.choice = selected.title;
-      session.vars.choice_id = selected.id;
-
-      if (cur.type === "language") {
-        session.vars.language = selected.title;
-      }
-
+      session.vars[`${cur.type}_choice`] = options[idx];
+      session.vars.choice = options[idx]; // generic alias for condition blocks
+      if (cur.type === "language") session.vars.language = options[idx];
       await continueOrEnd(cur, idx);
     } else {
       out.push(`Sorry, I didn't catch that.\n\n${optionPrompt(c, session.vars)}`);
@@ -790,6 +793,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
     }
     const meta = collectConfig[cur.type];
     const ack = c.ack || meta.ack || "Got it.";
+    // acks may reference config fields too (e.g. tracking_link's {baseUrl})
     out.push(interp(ack, { ...c, ...session.vars }));
     await continueOrEnd(cur, 0);
     return out;
@@ -814,11 +818,13 @@ async function processMessage(flow, text, session, trace, dryRun) {
     }
     session.vars[c.field || "rating"] = String(rating);
     out.push(interp(c.thanks || "Thanks for rating us {rating}/5.", session.vars));
+    // fall back to the first wired port so a single outgoing wire covers all ratings
     const port = firstEdge(flow, cur.id, rating - 1) ? rating - 1 : 0;
     await continueOrEnd(cur, port);
     return out;
   }
 
+  // AI chat mode: every message goes to the owner's LLM until the customer exits with 0
   if (cur.type === "ai_reply") {
     if (t === "0" || /^(exit|menu|back)$/i.test(t)) {
       delete (session.aiHist || {})[cur.id];
@@ -826,6 +832,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
       return out;
     }
     const hist = ((session.aiHist ??= {})[cur.id] ??= []);
+    // dry-run: never hit the owner's real LLM (cost + nondeterminism) during replay
     const r = dryRun ? { ok: true, text: "[dry-run: AI reply skipped]" } : await aiReply(c, hist, t, session.vars);
     if (r.ok) {
       hist.push({ role: "user", content: t }, { role: "assistant", content: r.text });
