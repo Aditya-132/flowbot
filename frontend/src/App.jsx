@@ -219,7 +219,7 @@ const NODE_TYPES = {
   interactive_list: {
     label: "Interactive List", icon: "📋", color: "#F59E0B",
     desc: "A tappable list menu — up to 10 options (more than 3 buttons allow). Each option branches.",
-    defaults: () => ({ prompt: "Choose a service 💇", options: ["Haircut", "Facial", "Manicure", "Hair Spa", "Bridal Makeup"] }),
+    defaults: () => ({ prompt: "Choose a service 💇", buttonText: "View services", sectionTitle: "Our services", options: ["Haircut", "Facial", "Manicure", "Hair Spa", "Bridal Makeup"] }),
     outputs: (c) => (c.options || []).length,
   },
   media: {
@@ -439,6 +439,13 @@ function runFlowDoctor(nodes, edges) {
     // below can't catch this: zero options means zero expected output ports.
     if (menuLikeTypes.has(n.type) && !(n.config?.options || []).length) {
       issues.push({ severity: "error", nodeId: n.id, message: `"${typeInfo(n).label}" has no options — nothing a customer types can match, so anyone who reaches it is permanently stuck.` });
+    }
+    if (n.type === "interactive_list") {
+      const opts = n.config?.options || [];
+      if (opts.length > 10) issues.push({ severity: "error", nodeId: n.id, message: "WhatsApp interactive lists support at most 10 rows." });
+      if (opts.some((o) => String(o).length > 24)) issues.push({ severity: "error", nodeId: n.id, message: "Every WhatsApp list option title must be 24 characters or fewer." });
+      if (String(n.config?.buttonText || "View options").length > 20) issues.push({ severity: "error", nodeId: n.id, message: "WhatsApp list button text must be 20 characters or fewer." });
+      if (String(n.config?.sectionTitle || "Options").length > 24) issues.push({ severity: "error", nodeId: n.id, message: "WhatsApp list section title must be 24 characters or fewer." });
     }
     // terminal blocks (goodbye) really have 0 outputs — outputCount() clamps 0 to 1
     // for canvas port rendering, which would flag every goodbye as a fake dead end
@@ -1318,15 +1325,6 @@ function Builder({ user, onAuthed, onLogout }) {
               <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
             ))}
           </div>
-          <a
-            href="https://chat.whatsapp.com/JBWlJr0uxTvJjZ7hcjqPo8?s=sw&p=a&iam=2"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5, textDecoration: "none", display: "inline-flex", alignItems: "center" }}
-            title="Join the FlowBot WhatsApp community for help"
-          >
-            ❓ Help
-          </a>
           {!isMobile && (
             <button style={{ ...S.ghostBtn, padding: "8px 11px" }} title="Show the tutorial again" onClick={openTour}>❓</button>
           )}
@@ -2206,10 +2204,21 @@ function Builder({ user, onAuthed, onLogout }) {
                     <textarea style={S.textarea} rows={2} value={selNode.config.prompt}
                       onChange={(e) => updateConfig(selNode.id, { prompt: e.target.value })} />
                   </Field>
+                  {selNode.type === "interactive_list" && (<>
+                    <Field label="WhatsApp list button text (max 20 characters)">
+                      <input style={S.input} maxLength={20} value={selNode.config.buttonText || "View options"}
+                        onChange={(e) => updateConfig(selNode.id, { buttonText: e.target.value })} />
+                    </Field>
+                    <Field label="Section title (max 24 characters)">
+                      <input style={S.input} maxLength={24} value={selNode.config.sectionTitle || "Options"}
+                        onChange={(e) => updateConfig(selNode.id, { sectionTitle: e.target.value })} />
+                    </Field>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>WhatsApp list rows support up to 10 options; each option title is limited to 24 characters.</div>
+                  </>)}
                   <Field label="Options (each gets its own output dot)">
                     {(selNode.config.options || []).map((o, i) => (
                       <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                        <input style={{ ...S.input, flex: 1 }} value={o}
+                        <input style={{ ...S.input, flex: 1 }} maxLength={selNode.type === "interactive_list" ? 24 : undefined} value={o}
                           onChange={(e) => {
                             const options = [...selNode.config.options];
                             options[i] = e.target.value;
@@ -2218,7 +2227,7 @@ function Builder({ user, onAuthed, onLogout }) {
                         <button style={S.miniBtn} title="Remove option" onClick={() => removeOption(selNode, i)}>✕</button>
                       </div>
                     ))}
-                    {(selNode.config.options || []).length < 6 && (
+                    {(selNode.config.options || []).length < (selNode.type === "interactive_list" ? 10 : 6) && (
                       <button style={S.addBtn} onClick={() => updateConfig(selNode.id, { options: [...(selNode.config.options || []), "New option"] })}>+ Add option</button>
                     )}
                   </Field>
