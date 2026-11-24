@@ -417,8 +417,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
           break;
 
         case "faq": {
-          const kws = (c.pairs || []).map((p) => `"${p.k}"`).join(", ");
-          out.push(`Ask me anything — try keywords like ${kws}.\nType 0 when you're done.`);
+          out.push("What would you like to know?\nType 0 when you're done.");
           session.state = cur.id;
           return;
         }
