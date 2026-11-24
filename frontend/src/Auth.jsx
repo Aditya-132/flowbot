@@ -96,6 +96,19 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
                     {countryName} ({countryCode}) <span aria-hidden="true">▾</span>
                   </button>
                   {countryOpen && (
+                    <div style={S.countryList} role="listbox" aria-label="Country calling codes">
+                      {COUNTRY_CODES.map((country, index) => (
+                        <button
+                          type="button"
+                          key={`${country.name}-${index}`}
+                          role="option"
+                          aria-selected={country.name === countryName}
+                          style={{ ...S.countryOption, ...(country.name === countryName ? S.countryOptionActive : {}) }}
+                          onClick={() => { setCountryCode(country.code); setCountryName(country.name); setCountryOpen(false); }}
+                        >
+                          {country.name} ({country.code})
+                        </button>
+                      ))}
                     <div style={S.countryList} aria-label="Country calling codes">
                       <input
                         style={S.countrySearch}
@@ -180,6 +193,15 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
 }
 
 const COUNTRY_CODES = [
+  { name: "India", code: "+91" }, { name: "United States", code: "+1" },
+  { name: "United Kingdom", code: "+44" }, { name: "United Arab Emirates", code: "+971" },
+  { name: "Australia", code: "+61" }, { name: "Canada", code: "+1" },
+  { name: "Singapore", code: "+65" }, { name: "Pakistan", code: "+92" },
+  { name: "Bangladesh", code: "+880" }, { name: "Nepal", code: "+977" },
+  { name: "Sri Lanka", code: "+94" }, { name: "Germany", code: "+49" },
+  { name: "France", code: "+33" }, { name: "Saudi Arabia", code: "+966" },
+  { name: "South Africa", code: "+27" }, { name: "Japan", code: "+81" },
+  { name: "China", code: "+86" }, { name: "New Zealand", code: "+64" },
   { name: "India", code: "+91" },
   { name: "Afghanistan", code: "+93" },
   { name: "Albania", code: "+355" },
@@ -441,6 +463,7 @@ const S = {
   phoneRow: { display: "flex", gap: 7 },
   countryPicker: { position: "relative", width: 145, flexShrink: 0 },
   countryCode: { boxSizing: "border-box", width: "100%", minHeight: 39, padding: "9px 7px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 12, fontFamily: "inherit", cursor: "pointer", textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  countryList: { position: "absolute", zIndex: 20, top: "calc(100% + 4px)", left: 0, width: 230, maxHeight: 190, overflowY: "scroll", overscrollBehavior: "contain", background: "#ffffff", border: "1px solid #d6dee9", borderRadius: 8, boxShadow: "0 8px 24px rgba(15,23,42,.16)", padding: 4 },
   countryList: { position: "absolute", zIndex: 20, top: "calc(100% + 4px)", left: 0, width: 250, maxHeight: 270, display: "flex", flexDirection: "column", background: "#ffffff", border: "1px solid #d6dee9", borderRadius: 8, boxShadow: "0 8px 24px rgba(15,23,42,.16)", padding: 5 },
   countrySearch: { boxSizing: "border-box", width: "100%", flexShrink: 0, padding: "9px 10px", marginBottom: 5, border: "1px solid #d6dee9", borderRadius: 6, fontSize: 12, outline: "none", fontFamily: "inherit", color: "#0f172a", background: "#ffffff" },
   countryOptions: { minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" },

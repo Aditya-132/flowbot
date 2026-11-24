@@ -73,6 +73,9 @@ async function init() {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // Signup phone details (safe for existing databases).
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code TEXT NOT NULL DEFAULT '+91';`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       token      TEXT PRIMARY KEY,

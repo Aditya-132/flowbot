@@ -41,7 +41,7 @@ async function createSession(userId) {
   return token;
 }
 
-const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name });
+const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, countryCode: u.country_code, phone: u.phone });
 
 /* ---------- middleware: attaches req.user or replies 401 ---------- */
 async function requireAuth(req, res, next) {
@@ -69,6 +69,10 @@ async function signup(req, res) {
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "");
   const name = String(req.body.name || "").trim().slice(0, 60);
+  const countryCode = String(req.body.countryCode || "").trim();
+  const phone = String(req.body.phone || "").replace(/\D/g, "");
+  if (!/^\+[1-9]\d{0,3}$/.test(countryCode)) return res.status(400).json({ error: "valid country calling code required" });
+  if (phone.length < 5 || phone.length > 15) return res.status(400).json({ error: "valid phone number required" });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "valid email required" });
   if (password.length < 6) return res.status(400).json({ error: "password must be at least 6 characters" });
 
@@ -78,9 +82,9 @@ async function signup(req, res) {
   const id = crypto.randomBytes(6).toString("hex");
   const passwordHash = await hashPassword(password);
   const { rows } = await store.pool.query(
-    `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)
-     RETURNING id, email, name`,
-    [id, email, name || email.split("@")[0], passwordHash]
+    `INSERT INTO users (id, email, name, password_hash, country_code, phone) VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, email, name, country_code, phone`,
+    [id, email, name || email.split("@")[0], passwordHash, countryCode, phone]
   );
   const token = await createSession(id);
   res.status(201).json({ token, user: publicUser(rows[0]) });
