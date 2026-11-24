@@ -13,6 +13,8 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
+  const [countryName, setCountryName] = useState("India");
+  const [countryOpen, setCountryOpen] = useState(false);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
@@ -82,11 +84,33 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
             <label style={S.label}>
               Phone Number
               <div style={S.phoneRow}>
-                <select style={S.countryCode} value={countryCode} onChange={(e) => setCountryCode(e.target.value)} aria-label="Country calling code">
-                  {COUNTRY_CODES.map((country) => (
-                    <option key={country.code} value={country.code}>{country.name} ({country.code})</option>
-                  ))}
-                </select>
+                <div style={S.countryPicker}>
+                  <button
+                    type="button"
+                    style={S.countryCode}
+                    onClick={() => setCountryOpen((open) => !open)}
+                    aria-label="Select country calling code"
+                    aria-expanded={countryOpen}
+                  >
+                    {countryName} ({countryCode}) <span aria-hidden="true">▾</span>
+                  </button>
+                  {countryOpen && (
+                    <div style={S.countryList} role="listbox" aria-label="Country calling codes">
+                      {COUNTRY_CODES.map((country, index) => (
+                        <button
+                          type="button"
+                          key={`${country.name}-${index}`}
+                          role="option"
+                          aria-selected={country.name === countryName}
+                          style={{ ...S.countryOption, ...(country.name === countryName ? S.countryOptionActive : {}) }}
+                          onClick={() => { setCountryCode(country.code); setCountryName(country.name); setCountryOpen(false); }}
+                        >
+                          {country.name} ({country.code})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <input style={{ ...S.input, flex: 1, minWidth: 0 }} type="tel" required value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
                   placeholder="Phone number" autoComplete="tel-national" inputMode="numeric" />
@@ -153,7 +177,11 @@ const S = {
   tabActive: { background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", boxShadow: "0 3px 10px rgba(18,140,126,.3)" },
   label: { display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 700, color: "#0f766e" },
   phoneRow: { display: "flex", gap: 7 },
-  countryCode: { boxSizing: "border-box", width: 132, padding: "9px 7px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 13, fontFamily: "inherit" },
+  countryPicker: { position: "relative", width: 145, flexShrink: 0 },
+  countryCode: { boxSizing: "border-box", width: "100%", minHeight: 39, padding: "9px 7px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 12, fontFamily: "inherit", cursor: "pointer", textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  countryList: { position: "absolute", zIndex: 20, top: "calc(100% + 4px)", left: 0, width: 230, maxHeight: 190, overflowY: "scroll", overscrollBehavior: "contain", background: "#ffffff", border: "1px solid #d6dee9", borderRadius: 8, boxShadow: "0 8px 24px rgba(15,23,42,.16)", padding: 4 },
+  countryOption: { display: "block", width: "100%", border: "none", borderRadius: 5, background: "#ffffff", color: "#0f172a", padding: "8px 9px", fontSize: 12, textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
+  countryOptionActive: { background: "#e6f7f2", color: "#0f766e", fontWeight: 700 },
   input: { boxSizing: "border-box", padding: "9px 11px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 16, outline: "none", fontFamily: "inherit", width: "100%", fontWeight: 400 },
   error: { padding: "8px 12px", borderRadius: 8, background: "#fef2f2", border: "1px solid #ef4444", color: "#b91c1c", fontSize: 12.5, fontWeight: 700 },
   primaryBtn: { padding: "11px 18px", fontSize: 14, fontWeight: 800, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(18,140,126,.3)" },
