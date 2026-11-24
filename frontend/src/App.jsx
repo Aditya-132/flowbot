@@ -22,6 +22,17 @@ const MODEL_OPTIONS = {
 // cheap+fast defaults for the customer-facing AI Reply block (owner pays per message)
 const CHAT_MODEL_DEFAULTS = { anthropic: "claude-haiku-4-5", openai: "gpt-5-mini", gemini: "gemini-3.6-flash" };
 
+// Use the browser's complete IANA timezone database when available.
+const TIME_ZONE_OPTIONS = (() => {
+  const fallback = ["Africa/Johannesburg", "America/Los_Angeles", "America/New_York", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Australia/Sydney", "Europe/London", "Europe/Paris", "UTC"];
+  try {
+    const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : fallback;
+    return [...new Set(["UTC", ...zones])].sort((a, b) => a.localeCompare(b));
+  } catch {
+    return fallback;
+  }
+})();
+
 // A model <select> that also keeps unknown/legacy model ids selectable.
 function ModelSelect({ value, provider, style, onChange }) {
   const opts = MODEL_OPTIONS[provider] || MODEL_OPTIONS.anthropic;
@@ -181,8 +192,8 @@ const NODE_TYPES = {
   },
   business_hours: {
     label: "Business Hours", icon: "🕒", color: "#A3E635",
-    desc: "Branches based on server time.",
-    defaults: () => ({ startHour: 9, endHour: 18, openMessage: "We are open right now.", closedMessage: "We are closed right now. Leave a message and we will reply soon." }),
+    desc: "Branches based on the business timezone you select.",
+    defaults: () => ({ timezone: "Asia/Kolkata", startTime: "09:00", endTime: "18:00", openMessage: "We are open right now.", closedMessage: "We are closed right now. Leave a message and we will reply soon." }),
     outputs: () => 2,
   },
   human_handoff: {
@@ -492,7 +503,7 @@ const nodeSummary = (n) => {
   if (n.type === "product_card") return `${c.name} · ${c.price}`;
   if (n.type === "catalog") return `${c.title} · ${(c.items || []).length} items`;
   if (n.type === "product_search") return `${c.question} · ${(c.items || []).length} searchable items`;
-  if (n.type === "business_hours") return `${c.startHour}:00-${c.endHour}:00`;
+  if (n.type === "business_hours") return `${c.startTime || `${String(c.startHour ?? 9).padStart(2, "0")}:00`}-${c.endTime || `${String(c.endHour ?? 18).padStart(2, "0")}:00`}`;
   if (n.type === "condition") return `{${c.field}} ${c.operator || "equals"} ${c.value}`;
   if (n.type === "http_request") return `${c.method || "GET"} ${c.url || ""} → {${c.saveAs || "apiResult"}}`;
   if (n.type === "ai_reply") return `AI chat · ${c.provider || "anthropic"} · ${c.model || "default model"}${c.apiKey ? "" : " · ⚠ no key yet"}`;
@@ -1318,15 +1329,6 @@ function Builder({ user, onAuthed, onLogout }) {
               <button key={t} onClick={() => goTab(i)} style={{ ...S.tab, ...(isMobile ? { padding: "7px 10px" } : {}), ...(tab === i ? S.tabActive : {}) }}>{t}</button>
             ))}
           </div>
-          <a
-            href="https://chat.whatsapp.com/JBWlJr0uxTvJjZ7hcjqPo8?s=sw&p=a&iam=2"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ ...S.ghostBtn, padding: "8px 14px", fontSize: 12.5, textDecoration: "none", display: "inline-flex", alignItems: "center" }}
-            title="Join the FlowBot WhatsApp community for help"
-          >
-            ❓ Help
-          </a>
           {!isMobile && (
             <button style={{ ...S.ghostBtn, padding: "8px 11px" }} title="Show the tutorial again" onClick={openTour}>❓</button>
           )}
@@ -2224,6 +2226,38 @@ function Builder({ user, onAuthed, onLogout }) {
                   </Field>
                 </>)}
 
+                {selNode.type === "business_hours" && (<>
+                  <Field label="Business timezone">
+                    <select style={S.input}
+                      value={selNode.config.timezone || "Asia/Kolkata"}
+                      onChange={(e) => updateConfig(selNode.id, { timezone: e.target.value })}>
+                      {!TIME_ZONE_OPTIONS.includes(selNode.config.timezone || "Asia/Kolkata") && (
+                        <option value={selNode.config.timezone}>{selNode.config.timezone}</option>
+                      )}
+                      {TIME_ZONE_OPTIONS.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+                    </select>
+                  </Field>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: -7, marginBottom: 10 }}>
+                    Opening and closing hours below are interpreted in this timezone. They remain displayed as entered.
+                  </div>
+                  <Field label="Opening time">
+                    <input style={S.input} type="time" value={selNode.config.startTime || `${String(selNode.config.startHour ?? 9).padStart(2, "0")}:00`}
+                      onChange={(e) => updateConfig(selNode.id, { startTime: e.target.value })} />
+                  </Field>
+                  <Field label="Closing time">
+                    <input style={S.input} type="time" value={selNode.config.endTime || `${String(selNode.config.endHour ?? 18).padStart(2, "0")}:00`}
+                      onChange={(e) => updateConfig(selNode.id, { endTime: e.target.value })} />
+                  </Field>
+                  <Field label="Open message">
+                    <textarea style={S.textarea} rows={2} value={selNode.config.openMessage || ""}
+                      onChange={(e) => updateConfig(selNode.id, { openMessage: e.target.value })} />
+                  </Field>
+                  <Field label="Closed message">
+                    <textarea style={S.textarea} rows={2} value={selNode.config.closedMessage || ""}
+                      onChange={(e) => updateConfig(selNode.id, { closedMessage: e.target.value })} />
+                  </Field>
+                </>)}
+
                 {selNode.type === "faq" && (
                   <Field label="Keyword → reply pairs">
                     {selNode.config.pairs.map((p, i) => (
@@ -2399,7 +2433,7 @@ function Builder({ user, onAuthed, onLogout }) {
                   </Field>
                 </>)}
 
-                {!["welcome", "goodbye", "collect", "faq", "custom", "http_request", "ai_reply", "send_email"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
+                {!["welcome", "goodbye", "collect", "faq", "custom", "http_request", "ai_reply", "send_email", "business_hours"].includes(selNode.type) && !menuLikeTypes.has(selNode.type) && (
                   <GenericConfig node={selNode} updateConfig={updateConfig} />
                 )}
 
