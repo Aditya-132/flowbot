@@ -15,7 +15,7 @@ const restaurant = {
   desc: "Table booking, food orders, menu & offers, location, staff handoff — 20 blocks.",
   nodes: () => [
     N("w", "welcome", 0, 2, { message: "🍛 Welcome to Spice Villa! I'm your dining assistant — bookings, orders and more, right here on WhatsApp." }),
-    N("bh", "business_hours", 1, 2, { startHour: 11, endHour: 23, openMessage: "🟢 We're open right now (11 AM – 11 PM).", closedMessage: "" }),
+    N("bh", "business_hours", 1, 2, { timezone: "Asia/Kolkata", startHour: 11, endHour: 23, openMessage: "🟢 We're open right now (11 AM – 11 PM).", closedMessage: "" }),
     N("closed", "text", 2, 0, { message: "🌙 We're closed at the moment (open 11 AM – 11 PM), but you can still book a table or browse the menu!" }),
     N("m", "menu", 2, 2, { prompt: "How can I serve you today?", options: ["Book a table", "Order food", "Menu & offers", "Location & timings", "Talk to our staff"] }),
     // — Book a table —
@@ -82,7 +82,7 @@ const bank = {
     N("lphone", "collect_phone", 4, 4.5, { question: "Great choice! Share your phone number and our loan officer will call you within 24 hours:", ack: "📞 Number saved." }),
     N("ltag", "tag_customer", 5, 4.5, { tag: "loan_lead", message: "📝 You're registered for: {lead_qualify_choice}. Our officer will call you shortly." }),
     // — Branch, FAQs, agent —
-    N("branch", "business_hours", 3, 6, { startHour: 9, endHour: 17, openMessage: "🟢 Branches are open right now (Mon–Sat, 9 AM – 5 PM).", closedMessage: "🔴 Branches are closed now (Mon–Sat, 9 AM – 5 PM)." }),
+    N("branch", "business_hours", 3, 6, { timezone: "Asia/Kolkata", startHour: 9, endHour: 17, openMessage: "🟢 Branches are open right now (Mon–Sat, 9 AM – 5 PM).", closedMessage: "🔴 Branches are closed now (Mon–Sat, 9 AM – 5 PM)." }),
     N("baddr", "text", 4, 6, { message: "🏢 Nearest branch: SafeBank, 45 FC Road, Pune 411004\nIFSC: SAFE0000123 · ATM available 24×7" }),
     N("faqs", "faq", 3, 7.5, { pairs: [
       { k: "interest", a: "Savings account interest is 4% p.a., credited quarterly." },
@@ -282,7 +282,7 @@ const hotel = {
       { name: "Qubani ka Meetha", price: "₹249" },
     ] }),
     N("dcoup", "coupon", 6.4, 8.4, { message: "🥂 Happy hours 4–7 PM — flat 20% off F&B:", code: "DINE20" }),
-    N("dhours", "business_hours", 5.2, 9.9, { startHour: 7, endHour: 23, openMessage: "🟢 Our restaurants are serving right now!", closedMessage: "🔴 Kitchens are closed (7 AM – 11 PM) — but room service runs 24×7." }),
+    N("dhours", "business_hours", 5.2, 9.9, { timezone: "Asia/Kolkata", startHour: 7, endHour: 23, openMessage: "🟢 Our restaurants are serving right now!", closedMessage: "🔴 Kitchens are closed (7 AM – 11 PM) — but room service runs 24×7." }),
     N("dvenues", "text", 6.4, 9.9, { message: "🍽️ Venues:\n• Jewel of Nizam (rooftop, 12–11 PM)\n• Café Charminar (all-day, 7 AM–11 PM)\n• Aqua Bar (poolside, 4 PM–12 AM)\n• In-room dining 24×7" }),
 
     /* — 3. spa & wellness — */
