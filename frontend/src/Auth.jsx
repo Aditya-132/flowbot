@@ -12,6 +12,8 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
   const [mode, setMode] = useState("login"); // "login" | "signup"
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -23,7 +25,7 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
     try {
       const res =
         mode === "signup"
-          ? await api.signup({ name, email, password })
+          ? await api.signup({ name, email, password, countryCode, phone: phone.trim() })
           : await api.login({ email, password });
       setToken(res.token);
       onAuth(res.user);
@@ -76,6 +78,21 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
                 placeholder="Your name" autoComplete="name" />
             </label>
           )}
+          {mode === "signup" && (
+            <label style={S.label}>
+              Phone Number
+              <div style={S.phoneRow}>
+                <select style={S.countryCode} value={countryCode} onChange={(e) => setCountryCode(e.target.value)} aria-label="Country calling code">
+                  {COUNTRY_CODES.map((country) => (
+                    <option key={country.code} value={country.code}>{country.name} ({country.code})</option>
+                  ))}
+                </select>
+                <input style={{ ...S.input, flex: 1, minWidth: 0 }} type="tel" required value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Phone number" autoComplete="tel-national" inputMode="numeric" />
+              </div>
+            </label>
+          )}
           <label style={S.label}>
             Email
             <input style={S.input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
@@ -112,6 +129,18 @@ export default function AuthPage({ onAuth, modal = false, onClose }) {
   );
 }
 
+const COUNTRY_CODES = [
+  { name: "India", code: "+91" }, { name: "United States", code: "+1" },
+  { name: "United Kingdom", code: "+44" }, { name: "United Arab Emirates", code: "+971" },
+  { name: "Australia", code: "+61" }, { name: "Canada", code: "+1" },
+  { name: "Singapore", code: "+65" }, { name: "Pakistan", code: "+92" },
+  { name: "Bangladesh", code: "+880" }, { name: "Nepal", code: "+977" },
+  { name: "Sri Lanka", code: "+94" }, { name: "Germany", code: "+49" },
+  { name: "France", code: "+33" }, { name: "Saudi Arabia", code: "+966" },
+  { name: "South Africa", code: "+27" }, { name: "Japan", code: "+81" },
+  { name: "China", code: "+86" }, { name: "New Zealand", code: "+64" },
+];
+
 const S = {
   page: { height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#eef2f9", color: "#0f172a", fontFamily: "'Sora','Segoe UI',system-ui,sans-serif", backgroundImage: "radial-gradient(#c6d3e8 1.2px, transparent 1.2px)", backgroundSize: "22px 22px" },
   pageModal: { position: "fixed", inset: 0, zIndex: 96, height: "auto", background: "rgba(15,23,42,.5)", backgroundImage: "none" },
@@ -123,6 +152,8 @@ const S = {
   tab: { flex: 1, padding: "8px 0", borderRadius: 7, border: "none", background: "transparent", color: "#64748b", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
   tabActive: { background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", boxShadow: "0 3px 10px rgba(18,140,126,.3)" },
   label: { display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 700, color: "#0f766e" },
+  phoneRow: { display: "flex", gap: 7 },
+  countryCode: { boxSizing: "border-box", width: 132, padding: "9px 7px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 13, fontFamily: "inherit" },
   input: { boxSizing: "border-box", padding: "9px 11px", borderRadius: 8, border: "1px solid #d6dee9", background: "#ffffff", color: "#0f172a", fontSize: 16, outline: "none", fontFamily: "inherit", width: "100%", fontWeight: 400 },
   error: { padding: "8px 12px", borderRadius: 8, background: "#fef2f2", border: "1px solid #ef4444", color: "#b91c1c", fontSize: 12.5, fontWeight: 700 },
   primaryBtn: { padding: "11px 18px", fontSize: 14, fontWeight: 800, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(18,140,126,.3)" },
