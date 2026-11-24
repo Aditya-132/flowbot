@@ -338,13 +338,40 @@ function productText(c, vars) {
 }
 
 function isOpenNow(c) {
-  const now = new Date();
-  const hour = now.getHours();
-  const start = Number(c.startHour ?? 9);
-  const end = Number(c.endHour ?? 18);
+  // Store and display the business's original local hours. Convert only the
+  // current instant into the selected IANA timezone for the comparison.
+  const timezone = String(c.timezone || "Asia/Kolkata").trim() || "Asia/Kolkata";
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+  } catch {
+    // A typo/unsupported zone should not crash message processing.
+    parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+  }
+  const part = (type) => Number(parts.find((item) => item.type === type)?.value || 0);
+  const currentMinutes = part("hour") * 60 + part("minute");
+  const toMinutes = (timeValue, fallbackHour) => {
+    const match = /^(\d{1,2}):([0-5]\d)$/.exec(String(timeValue || ""));
+    if (match && Number(match[1]) >= 0 && Number(match[1]) <= 23)
+      return Number(match[1]) * 60 + Number(match[2]);
+    const hour = Number(fallbackHour);
+    return (Number.isFinite(hour) ? Math.min(23, Math.max(0, hour)) : 9) * 60;
+  };
+  const start = toMinutes(c.startTime, c.startHour ?? 9);
+  const end = toMinutes(c.endTime, c.endHour ?? 18);
   if (start === end) return true;
-  if (start < end) return hour >= start && hour < end;
-  return hour >= start || hour < end;
+  if (start < end) return currentMinutes >= start && currentMinutes < end;
+  return currentMinutes >= start || currentMinutes < end;
 }
 
 /**
@@ -417,6 +444,7 @@ async function processMessage(flow, text, session, trace, dryRun) {
           break;
 
         case "faq": {
+          // Keep configured trigger keywords internal; never expose them in chat.
           out.push("What would you like to know?\nType 0 when you're done.");
           session.state = cur.id;
           return;
