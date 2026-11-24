@@ -142,7 +142,7 @@ const DOCS = [
 <tr><th>Block</th><th>What it does</th><th>Ports / sets</th></tr>
 <tr><td><b>Condition</b></td><td>Compares a variable against a value (<em>equals</em> or <em>contains</em>, case-insensitive). If the variable was never set, the bot asks for it first instead of silently branching.</td><td>port 0 true · port 1 false</td></tr>
 <tr><td><b>Language Router</b></td><td>A menu of languages; route each option to a branch written in that language.</td><td>1 port per language · sets <code>{language}</code></td></tr>
-<tr><td><b>Business Hours</b></td><td>Checks the server clock against your open/close hours (overnight ranges supported) and branches.</td><td>port 0 open · port 1 closed</td></tr>
+<tr><td><b>Business Hours</b></td><td>Checks the current time in your selected business timezone against your open/close hours (overnight ranges supported) and branches.</td><td>port 0 open · port 1 closed</td></tr>
 <tr><td><b>Set Variable</b></td><td>Sets a variable to a fixed (or interpolated) value.</td><td>1 port</td></tr>
 <tr><td><b>Save Note</b></td><td>Stores an internal note into a variable — useful for tagging steps of the journey.</td><td>1 port</td></tr>
 <tr><td><b>Tag Customer</b></td><td>Appends a tag to the customer's <code>{tags}</code> list. Leave the message empty to tag silently.</td><td>1 port</td></tr>
