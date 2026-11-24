@@ -29,7 +29,7 @@ booking_confirm{message} · coupon{message,code} · payment_link{message,url} ·
 product_card{name,price,description,link} · catalog{title,items:[{name,price}]}
 product_search{question,notFound,items:[{name,keywords,price,description,link}]} — 2 outputs: 0=found, 1=not found
 csat{question,field,thanks} — 5 outputs (ratings 1-5; wire at least port 0)
-business_hours{startHour,endHour,openMessage,closedMessage} — 2 outputs: 0=open, 1=closed
+business_hours{timezone,startTime,endTime,openMessage,closedMessage} — use 24-hour local times (HH:MM) and an IANA zone such as Africa/Johannesburg or Asia/Kolkata; legacy startHour/endHour are also supported; 2 outputs: 0=open, 1=closed
 condition{field,operator:"equals"|"contains",value,trueMessage,falseMessage} — 2 outputs: 0=true, 1=false
 set_variable{field,value,message} · tag_customer{tag,message} · save_note{field,note,message}
 return_policy{message} · shipping_info{message} · abandoned_cart{message} · review_request{message}
